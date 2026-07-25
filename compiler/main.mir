@@ -1,0 +1,7 @@
+import("core/os")
+
+pub fn main() -> File_Error {
+    try stdout.write("Hello World!\n")
+
+    return_ok
+}

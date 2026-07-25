@@ -1,0 +1,2 @@
+*       text=auto
+*.mir   diff=rust linguist-language=Rust

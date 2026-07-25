@@ -1,0 +1,1650 @@
+//##############################################################################
+//
+//   raylib v6.1-dev - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
+//
+//   FEATURES:
+//       - NO external dependencies, all required libraries included with raylib
+//       - Multiplatform: Windows, Linux, macOS, FreeBSD, Web, Android, Raspberry Pi, DRM native...
+//       - Written in plain C code (C99) in PascalCase/camelCase notation
+//       - Hardware accelerated with OpenGL (1.1, 2.1, 3.3, 4.3, ES2, ES3 - choose at compile)
+//       - Software renderer optional, for systems with no GPU: [rlsw]
+//       - Custom OpenGL abstraction layer (usable as standalone module): [rlgl]
+//       - Multiple Fonts formats supported (TTF, OTF, FNT, BDF, Sprite fonts)
+//       - Many texture formats supported, including compressed formats (DXT, ETC, ASTC)
+//       - Full 3d support for 3d Shapes, Models, Billboards, Heightmaps and more!
+//       - Flexible Materials system, supporting classic maps and PBR maps
+//       - Animated 3D models supported (skeletal bones animation) (IQM, M3D, GLTF)
+//       - Shaders support, including Model shaders and Postprocessing shaders
+//       - Powerful math module for Vector, Matrix and Quaternion operations: [raymath]
+//       - Audio loading and playing with streaming support (WAV, OGG, MP3, FLAC, QOA, XM, MOD)
+//       - VR stereo rendering with configurable HMD device parameters
+//       - Bindings to multiple programming languages available!
+//
+//   NOTES:
+//       - One default Font is loaded on InitWindow()->LoadFontDefault() [core, text]
+//       - One default Texture2D is loaded on rlglInit(), 1x1 white pixel R8G8B8A8 [rlgl] (OpenGL 3.3 or ES2)
+//       - One default Shader is loaded on rlglInit()->rlLoadShaderDefault() [rlgl] (OpenGL 3.3 or ES2)
+//       - One default RenderBatch is loaded on rlglInit()->rlLoadRenderBatch() [rlgl] (OpenGL 3.3 or ES2)
+//
+//   DEPENDENCIES:
+//       [rcore] Depends on the selected platform backend, check rcore.c header for details
+//       [rlgl] glad/glad_gles2 (David Herberth - github.com/Dav1dde/glad) for OpenGL extensions loading
+//       [raudio] miniaudio (David Reid - github.com/mackron/miniaudio) for audio device/context management
+//
+//   OPTIONAL DEPENDENCIES (included):
+//       [rcore] sinfl (Micha Mettke) for DEFLATE decompression algorithm
+//       [rcore] sdefl (Micha Mettke) for DEFLATE compression algorithm
+//       [rcore] rprand (Ramon Santamaria) for pseudo-random numbers generation
+//       [rtextures] qoi (Dominic Szablewski - https://phoboslab.org) for QOI image management
+//       [rtextures] stb_image (Sean Barrett) for images loading (BMP, TGA, PNG, JPEG, HDR...)
+//       [rtextures] stb_image_write (Sean Barrett) for image writing (BMP, TGA, PNG, JPG)
+//       [rtextures] stb_image_resize2 (Sean Barrett) for image resizing algorithms
+//       [rtextures] stb_perlin (Sean Barrett) for Perlin Noise image generation
+//       [rtextures] rltexgpu (Ramon Santamaria) for GPU-compressed texture formats
+//       [rtext] stb_truetype (Sean Barrett) for ttf fonts loading
+//       [rtext] stb_rect_pack (Sean Barrett) for rectangles packing
+//       [rmodels] par_shapes (Philip Rideout) for parametric 3d shapes generation
+//       [rmodels] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
+//       [rmodels] cgltf (Johannes Kuhlmann) for models loading (glTF)
+//       [rmodels] m3d (bzt) for models loading (M3D, https://bztsrc.gitlab.io/model3d)
+//       [rmodels] vox_loader (Johann Nadalutti) for models loading (VOX)
+//       [raudio] dr_wav (David Reid) for WAV audio file loading
+//       [raudio] dr_flac (David Reid) for FLAC audio file loading
+//       [raudio] dr_mp3 (David Reid) for MP3 audio file loading
+//       [raudio] stb_vorbis (Sean Barrett) for OGG audio loading
+//       [raudio] jar_xm (Joshua Reisenauer) for XM audio module loading
+//       [raudio] jar_mod (Joshua Reisenauer) for MOD audio module loading
+//       [raudio] qoa (Dominic Szablewski - https://phoboslab.org) for QOA audio management
+//
+//
+//   LICENSE: zlib/libpng
+//
+//   raylib is licensed under an unmodified zlib/libpng license, which is an OSI-certified,
+//   BSD-like license that allows static linking with closed source software:
+//
+//   Copyright (c) 2013-2026 Ramon Santamaria (@raysan5)
+//
+//   This software is provided "as-is", without any express or implied warranty. In no event
+//   will the authors be held liable for any damages arising from the use of this software.
+//
+//   Permission is granted to anyone to use this software for any purpose, including commercial
+//   applications, and to alter it and redistribute it freely, subject to the following restrictions:
+//
+//     1. The origin of this software must not be misrepresented; you must not claim that you
+//     wrote the original software. If you use this software in a product, an acknowledgment
+//     in the product documentation would be appreciated but is not required.
+//
+//     2. Altered source versions must be plainly marked as such, and must not be misrepresented
+//     as being the original software.
+//
+//     3. This notice may not be removed or altered from any source distribution.
+//
+//##############################################################################
+
+pub const RAYLIB_VERSION_MAJOR := 6
+pub const RAYLIB_VERSION_MINOR := 1
+pub const RAYLIB_VERSION_PATCH := 0
+pub const RAYLIB_VERSION := "6.1-dev"
+
+//-------------------------------------------------------------------------------
+// Defines and Macros
+//-------------------------------------------------------------------------------
+const PI      := 3.14159265358979323846
+const DEG2RAD := PI / 180.0
+const RAD2DEG := 180.0 / PI
+
+// Some Basic Colors
+// NOTE: Custom raylib color palette for amazing visuals on WHITE background
+pub const LIGHTGRAY: Color  = { 200, 200, 200, 255 } // Light Gray
+pub const GRAY: Color       = { 130, 130, 130, 255 } // Gray
+pub const DARKGRAY: Color   = { 80,  80,  80,  255 } // Dark Gray
+pub const YELLOW: Color     = { 253, 249, 0,   255 } // Yellow
+pub const GOLD: Color       = { 255, 203, 0,   255 } // Gold
+pub const ORANGE: Color     = { 255, 161, 0,   255 } // Orange
+pub const PINK: Color       = { 255, 109, 194, 255 } // Pink
+pub const RED: Color        = { 230, 41,  55,  255 } // Red
+pub const MAROON: Color     = { 190, 33,  55,  255 } // Maroon
+pub const GREEN: Color      = { 0,   228, 48,  255 } // Green
+pub const LIME: Color       = { 0,   158, 47,  255 } // Lime
+pub const DARKGREEN: Color  = { 0,   117, 44,  255 } // Dark Green
+pub const SKYBLUE: Color    = { 102, 191, 255, 255 } // Sky Blue
+pub const BLUE: Color       = { 0,   121, 241, 255 } // Blue
+pub const DARKBLUE: Color   = { 0,   82,  172, 255 } // Dark Blue
+pub const PURPLE: Color     = { 200, 122, 255, 255 } // Purple
+pub const VIOLET: Color     = { 135, 60,  190, 255 } // Violet
+pub const DARKPURPLE: Color = { 112, 31,  126, 255 } // Dark Purple
+pub const BEIGE: Color      = { 211, 176, 131, 255 } // Beige
+pub const BROWN: Color      = { 127, 106, 79,  255 } // Brown
+pub const DARKBROWN: Color  = { 76,  63,  47,  255 } // Dark Brown
+
+pub const WHITE: Color      = { 255, 255, 255, 255 } // White
+pub const BLACK: Color      = { 0,   0,   0,   255 } // Black
+pub const BLANK: Color      = { 0,   0,   0,   0   } // Blank (Transparent)
+pub const MAGENTA: Color    = { 255, 0,   255, 255 } // Magenta
+pub const RAYWHITE: Color   = { 245, 245, 245, 255 } // My own White (raylib logo)
+
+//------------------------------------------------------------------------------
+// Types and Structures Definition
+//------------------------------------------------------------------------------
+// Vector2, 2 components
+pub type Vector2 = struct { x: f32 y: f32 }
+
+// Vector3, 3 components
+pub type Vector3 = struct { x: f32 y: f32 z: f32 }
+
+// Vector4, 4 components
+pub type Vector4 = struct { x: f32 y: f32 z: f32 w: f32 }
+
+// Quaternion, 4 components (Vector4 alias)
+pub type Quaternion = Vector4
+
+// Matrix, 4x4 components, column major, OpenGL style, right-handed
+pub type Matrix = struct {
+    m0: f32 m4: f32 m8:  f32 m12: f32 // Matrix first row (4 components)
+    m1: f32 m5: f32 m9:  f32 m13: f32 // Matrix second row (4 components)
+    m2: f32 m6: f32 m10: f32 m14: f32 // Matrix third row (4 components)
+    m3: f32 m7: f32 m11: f32 m15: f32 // Matrix fourth row (4 components)
+}
+
+// Color, 4 components, R8G8B8A8 (32bit)
+pub type Color = struct {
+    r: u8                           // Color red value
+    g: u8                           // Color green value
+    b: u8                           // Color blue value
+    a: u8                           // Color alpha value
+}
+
+// Rectangle, 4 components
+pub type Rectangle = struct {
+    x: f32                          // Rectangle top-left corner position x
+    y: f32                          // Rectangle top-left corner position y
+    width: f32                      // Rectangle width
+    height: f32                     // Rectangle height
+}
+
+// Image, pixel data stored in CPU memory (RAM)
+pub type Image = struct {
+    data: anyptr                    // Image raw data
+    width: i32                      // Image base width
+    height: i32                     // Image base height
+    mipmaps: i32                    // Mipmap levels, 1 by default
+    format: i32                     // Data format (PixelFormat type)
+}
+
+// Texture, tex data stored in GPU memory (VRAM)
+pub type Texture = struct {
+    id: u32                         // OpenGL texture id
+    width: i32                      // Texture base width
+    height: i32                     // Texture base height
+    mipmaps: i32                    // Mipmap levels, 1 by default
+    format: i32                     // Data format (PixelFormat type)
+}
+
+// Texture2D, same as Texture
+pub type Texture2D = Texture
+
+// TextureCubemap, same as Texture
+pub type TextureCubemap = Texture
+
+// RenderTexture, fbo for texture rendering
+pub type RenderTexture = struct {
+    id: u32                         // OpenGL framebuffer object id
+    texture: Texture                // Color buffer attachment texture
+    depth: Texture                  // Depth buffer attachment texture
+}
+
+// RenderTexture2D, same as RenderTexture
+pub type RenderTexture2D = RenderTexture
+
+// NPatchInfo, n-patch layout info
+pub type NPatchInfo = struct {
+    source: Rectangle               // Texture source rectangle
+    left: i32                       // Left border offset
+    top: i32                        // Top border offset
+    right: i32                      // Right border offset
+    bottom: i32                     // Bottom border offset
+    layout: NPatchLayout            // Layout of the n-patch: 3x3, 1x3 or 3x1
+}
+
+// GlyphInfo, font characters glyphs info
+pub type GlyphInfo = struct {
+    value: i32                      // Character value (Unicode)
+    offsetX: i32                    // Character offset X when drawing
+    offsetY: i32                    // Character offset Y when drawing
+    advanceX: i32                   // Character advance position X
+    image: Image                    // Character image data
+}
+
+// Font, font texture and GlyphInfo array data
+pub type Font = struct {
+    baseSize: i32                   // Base size (default chars height)
+    glyphCount: i32                 // Number of glyph characters
+    glyphPadding: i32               // Padding around the glyph characters
+    texture: Texture2D              // Texture atlas containing the glyphs
+    recs: *Rectangle                // Rectangles in texture for the glyphs
+    glyphs: *GlyphInfo              // Glyphs info data
+}
+
+// Camera, defines position/orientation in 3d space
+pub type Camera3D = struct {
+    position: Vector3               // Camera position
+    target: Vector3                 // Camera target it looks-at
+    up: Vector3                     // Camera up vector (rotation over its axis)
+    fovy: f32                       // Camera field-of-view aperture in Y (degrees) in perspective, used as near plane height in world units in orthographic
+    projection: CameraProjection    // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+}
+
+pub type Camera = Camera3D  // Camera type fallback, defaults to Camera3D
+
+// Camera2D, defines position/orientation in 2d space
+pub type Camera2D = struct {
+    offset: Vector2                 // Camera offset (screen space offset from window origin)
+    target: Vector2                 // Camera target (world space target point that is mapped to screen space offset)
+    rotation: f32                   // Camera rotation in degrees (pivots around target)
+    zoom: f32                       // Camera zoom (scaling around target), must not be set to 0, set to 1.0f for no scale
+}
+
+// Mesh, vertex data and vao/vbo
+pub type Mesh = struct {
+    vertexCount: i32                // Number of vertices stored in arrays
+    triangleCount: i32              // Number of triangles stored (indexed or not)
+
+    // Vertex attributes data
+    vertices: *f32                  // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
+    texcoords: *f32                 // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
+    texcoords2: *f32                // Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
+    normals: *f32                   // Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
+    tangents: *f32                  // Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
+    colors: *u8                     // Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
+    indices: *u16                   // Vertex indices (in case vertex data comes indexed)
+
+    // Skin data for animation
+    boneCount: i32                  // Number of bones (MAX: 256 bones)
+    boneIndices: *u8                // Vertex bone indices, up to 4 bones influence by vertex (skinning) (shader-location = 6)
+    boneWeights: *f32               // Vertex bone weight, up to 4 bones influence by vertex (skinning) (shader-location = 7)
+
+    // Runtime animation vertex data (CPU skinning)
+    // NOTE: In case of GPU skinning, not used, pointers are NULL
+    animVertices: *f32              // Animated vertex positions (after bones transformations)
+    animNormals: *f32               // Animated normals (after bones transformations)
+
+    // OpenGL identifiers
+    vaoId: u32                      // OpenGL Vertex Array Object id
+    vboId: *u32                     // OpenGL Vertex Buffer Objects id (default vertex data)
+}
+
+// Shader
+pub type Shader = struct {
+    id: u32                         // Shader program id
+    locs: *i32                      // Shader locations array (RL_MAX_SHADER_LOCATIONS)
+}
+
+// MaterialMap
+pub type MaterialMap = struct {
+    texture: Texture2D              // Material map texture
+    color: Color                    // Material map color
+    value: f32                      // Material map value
+}
+
+// Material, includes shader and maps
+pub type Material = struct {
+    shader: Shader                  // Material shader
+    maps: *MaterialMap              // Material maps array (MAX_MATERIAL_MAPS)
+    params: [4]f32                  // Material generic parameters (if required)
+}
+
+// Transform, vertex transformation data
+pub type Transform = struct {
+    translation: Vector3            // Translation
+    rotation: Quaternion            // Rotation
+    scale: Vector3                  // Scale
+}
+
+// Anim pose, an array of Transform[]
+pub type ModelAnimPose = *Transform
+
+// Bone, skeletal animation bone
+pub type BoneInfo = struct {
+    name: [32]u8                    // Bone name
+    parent: i32                     // Bone parent
+}
+
+// Skeleton, animation bones hierarchy
+pub type ModelSkeleton = struct {
+    boneCount: u32                  // Number of bones
+    bones: *BoneInfo                // Bones information (skeleton)
+    bindPose: ModelAnimPose         // Bones base transformation (Transform[])
+}
+
+// Model, meshes, materials and animation data
+pub type Model = struct {
+    transform: Matrix               // Local transform matrix
+
+    meshCount: i32                  // Number of meshes
+    materialCount: i32              // Number of materials
+    meshes: *Mesh                   // Meshes array
+    materials: *Material            // Materials array
+    meshMaterial: *i32              // Mesh material number
+
+    // Animation data
+    skeleton: ModelSkeleton         // Skeleton for animation
+
+    // Runtime animation data (CPU/GPU skinning)
+    currentPose: ModelAnimPose      // Current animation pose (Transform[])
+    boneMatrices: *Matrix           // Bones animated transformation matrices
+}
+
+// ModelAnimation, contains a full animation sequence
+pub type ModelAnimation = struct {
+    name: [32]u8                    // Animation name
+
+    boneCount: u32                  // Number of bones (per pose)
+    keyframeCount: i32              // Number of animation key frames
+    keyframePoses: *ModelAnimPose   // Animation sequence keyframe poses [keyframe][pose]
+}
+
+// Ray, ray for raycasting
+pub type Ray = struct {
+    position: Vector3               // Ray position (origin)
+    direction: Vector3              // Ray direction (normalized)
+}
+
+// RayCollision, ray hit information
+pub type RayCollision = struct {
+    hit: bool                       // Did the ray hit something?
+    distance: f32                   // Distance to the nearest hit
+    point: Vector3                  // Point of the nearest hit
+    normal: Vector3                 // Surface normal of hit
+}
+
+// BoundingBox
+pub type BoundingBox = struct {
+    min: Vector3                    // Minimum vertex box-corner
+    max: Vector3                    // Maximum vertex box-corner
+}
+
+// Wave, audio wave data
+pub type Wave = struct {
+    frameCount: u32                 // Total number of frames (considering channels)
+    sampleRate: u32                 // Frequency (samples per second)
+    sampleSize: u32                 // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    channels: u32                   // Number of channels (1-mono, 2-stereo, ...)
+    data: anyptr                    // Buffer data pointer
+}
+
+// Opaque structs declaration
+// NOTE: Actual structs are defined internally in raudio module
+pub type rAudioBuffer = struct {}
+pub type rAudioProcessor = struct {}
+
+// AudioStream, custom audio stream
+pub type AudioStream = struct {
+    buffer: *rAudioBuffer           // Pointer to internal data used by the audio system
+    processor: *rAudioProcessor     // Pointer to internal data processor, useful for audio effects
+
+    sampleRate: u32                 // Frequency (samples per second)
+    sampleSize: u32                 // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    channels: u32                   // Number of channels (1-mono, 2-stereo, ...)
+}
+
+// Sound
+pub type Sound = struct {
+    stream: AudioStream             // Audio stream
+    frameCount: u32                 // Total number of frames (considering channels)
+}
+
+// Music, audio stream, anything longer than ~10 seconds should be streamed
+pub type Music = struct {
+    stream: AudioStream             // Audio stream
+    frameCount: u32                 // Total number of frames (considering channels)
+    looping: bool                   // Music looping enable
+
+    ctxType: i32                    // Type of music context (audio filetype)
+    ctxData: anyptr                 // Audio context data, depends on type
+}
+
+// VrDeviceInfo, Head-Mounted-Display device parameters
+pub type VrDeviceInfo = struct {
+    hResolution: i32                // Horizontal resolution in pixels
+    vResolution: i32                // Vertical resolution in pixels
+    hScreenSize: f32                // Horizontal size in meters
+    vScreenSize: f32                // Vertical size in meters
+    eyeToScreenDistance: f32        // Distance between eye and display in meters
+    lensSeparationDistance: f32     // Lens separation distance in meters
+    interpupillaryDistance: f32     // IPD (distance between pupils) in meters
+    lensDistortionValues: [4]f32    // Lens distortion constant parameters
+    chromaAbCorrection: [4]f32      // Chromatic aberration correction parameters
+}
+
+// VrStereoConfig, VR stereo rendering configuration for simulator
+pub type VrStereoConfig = struct {
+    projection: [2]Matrix           // VR projection matrices (per eye)
+    viewOffset: [2]Matrix           // VR view offset matrices (per eye
+    leftLensCenter: [2]f32          // VR left lens center
+    rightLensCenter: [2]f32         // VR right lens center
+    leftScreenCenter: [2]f32        // VR left screen center
+    rightScreenCenter: [2]f32       // VR right screen center
+    scale: [2]f32                   // VR distortion scale
+    scaleIn: [2]f32                 // VR distortion scale in
+}
+
+// File path list
+pub type FilePathList = struct {
+    count: u32                      // Filepaths entries count
+    paths: **u8                     // Filepaths entries
+}
+
+// Automation event
+pub type AutomationEvent = struct {
+    frame: u32                      // Event frame
+    typ: u32                        // Event type (AutomationEventType)
+    params: [4]i32                  // Event parameters (if required)
+}
+
+// Automation event list
+pub type AutomationEventList = struct {
+    capacity: u32                   // Events max entries (MAX_AUTOMATION_EVENTS)
+    count: u32                      // Events entries count
+    events: *AutomationEvent        // Events entries
+}
+
+//------------------------------------------------------------------------------
+// Enumerators Definition
+//------------------------------------------------------------------------------
+// System/Window config flags
+// NOTE: Every bit registers one state (use it with bit masks)
+// By default all flags are set to 0
+pub type ConfigFlags = enum(u32) {
+    FLAG_VSYNC_HINT               = 0x00000040  // Set to try enabling V-Sync on GPU
+    FLAG_FULLSCREEN_MODE          = 0x00000002  // Set to run program in fullscreen
+    FLAG_WINDOW_RESIZABLE         = 0x00000004  // Set to allow resizable window
+    FLAG_WINDOW_UNDECORATED       = 0x00000008  // Set to disable window decoration (frame and buttons)
+    FLAG_WINDOW_HIDDEN            = 0x00000080  // Set to hide window
+    FLAG_WINDOW_MINIMIZED         = 0x00000200  // Set to minimize window (iconify)
+    FLAG_WINDOW_MAXIMIZED         = 0x00000400  // Set to maximize window (expanded to monitor)
+    FLAG_WINDOW_UNFOCUSED         = 0x00000800  // Set to window non focused
+    FLAG_WINDOW_TOPMOST           = 0x00001000  // Set to window always on top
+    FLAG_WINDOW_ALWAYS_RUN        = 0x00000100  // Set to allow windows running while minimized
+    FLAG_WINDOW_TRANSPARENT       = 0x00000010  // Set to allow transparent framebuffer
+    FLAG_WINDOW_HIGHDPI           = 0x00002000  // Set to support HighDPI
+    FLAG_WINDOW_MOUSE_PASSTHROUGH = 0x00004000  // Set to support mouse passthrough, only supported when FLAG_WINDOW_UNDECORATED
+    FLAG_BORDERLESS_WINDOWED_MODE = 0x00008000  // Set to run program in borderless windowed mode
+    FLAG_MSAA_4X_HINT             = 0x00000020  // Set to try enabling MSAA 4X
+    FLAG_INTERLACED_HINT          = 0x00010000  // Set to try enabling interlaced video format (for V3D)
+}
+
+// Trace log level
+// NOTE: Organized by priority level
+pub type TraceLogLevel = enum(i32) {
+    LOG_ALL         // Display all logs
+    LOG_TRACE       // Trace logging, intended for internal use only
+    LOG_DEBUG       // Debug logging, used for internal debugging, it should be disabled on release builds
+    LOG_INFO        // Info logging, used for program execution info
+    LOG_WARNING     // Warning logging, used on recoverable failures
+    LOG_ERROR       // Error logging, used on unrecoverable failures
+    LOG_FATAL       // Fatal logging, used to abort program: exit(EXIT_FAILURE)
+    LOG_NONE        // Disable logging
+}
+
+// Keyboard keys (US keyboard layout)
+// NOTE: Use GetKeyPressed() to allow redefining required keys for alternative layouts
+pub type KeyboardKey = enum(i32) {
+    KEY_NULL            = 0         // Key: NULL, used for no key pressed
+    // Alphanumeric keys
+    KEY_APOSTROPHE      = 39        // Key: '
+    KEY_COMMA           = 44        // Key: ,
+    KEY_MINUS           = 45        // Key: -
+    KEY_PERIOD          = 46        // Key: .
+    KEY_SLASH           = 47        // Key: /
+    KEY_ZERO            = 48        // Key: 0
+    KEY_ONE             = 49        // Key: 1
+    KEY_TWO             = 50        // Key: 2
+    KEY_THREE           = 51        // Key: 3
+    KEY_FOUR            = 52        // Key: 4
+    KEY_FIVE            = 53        // Key: 5
+    KEY_SIX             = 54        // Key: 6
+    KEY_SEVEN           = 55        // Key: 7
+    KEY_EIGHT           = 56        // Key: 8
+    KEY_NINE            = 57        // Key: 9
+    KEY_SEMICOLON       = 59        // Key: ;
+    KEY_EQUAL           = 61        // Key: =
+    KEY_A               = 65        // Key: A | a
+    KEY_B               = 66        // Key: B | b
+    KEY_C               = 67        // Key: C | c
+    KEY_D               = 68        // Key: D | d
+    KEY_E               = 69        // Key: E | e
+    KEY_F               = 70        // Key: F | f
+    KEY_G               = 71        // Key: G | g
+    KEY_H               = 72        // Key: H | h
+    KEY_I               = 73        // Key: I | i
+    KEY_J               = 74        // Key: J | j
+    KEY_K               = 75        // Key: K | k
+    KEY_L               = 76        // Key: L | l
+    KEY_M               = 77        // Key: M | m
+    KEY_N               = 78        // Key: N | n
+    KEY_O               = 79        // Key: O | o
+    KEY_P               = 80        // Key: P | p
+    KEY_Q               = 81        // Key: Q | q
+    KEY_R               = 82        // Key: R | r
+    KEY_S               = 83        // Key: S | s
+    KEY_T               = 84        // Key: T | t
+    KEY_U               = 85        // Key: U | u
+    KEY_V               = 86        // Key: V | v
+    KEY_W               = 87        // Key: W | w
+    KEY_X               = 88        // Key: X | x
+    KEY_Y               = 89        // Key: Y | y
+    KEY_Z               = 90        // Key: Z | z
+    KEY_LEFT_BRACKET    = 91        // Key: [
+    KEY_BACKSLASH       = 92        // Key: '\'
+    KEY_RIGHT_BRACKET   = 93        // Key: ]
+    KEY_GRAVE           = 96        // Key: `
+    // Function keys
+    KEY_SPACE           = 32        // Key: Space
+    KEY_ESCAPE          = 256       // Key: Esc
+    KEY_ENTER           = 257       // Key: Enter
+    KEY_TAB             = 258       // Key: Tab
+    KEY_BACKSPACE       = 259       // Key: Backspace
+    KEY_INSERT          = 260       // Key: Ins
+    KEY_DELETE          = 261       // Key: Del
+    KEY_RIGHT           = 262       // Key: Cursor right
+    KEY_LEFT            = 263       // Key: Cursor left
+    KEY_DOWN            = 264       // Key: Cursor down
+    KEY_UP              = 265       // Key: Cursor up
+    KEY_PAGE_UP         = 266       // Key: Page up
+    KEY_PAGE_DOWN       = 267       // Key: Page down
+    KEY_HOME            = 268       // Key: Home
+    KEY_END             = 269       // Key: End
+    KEY_CAPS_LOCK       = 280       // Key: Caps lock
+    KEY_SCROLL_LOCK     = 281       // Key: Scroll down
+    KEY_NUM_LOCK        = 282       // Key: Num lock
+    KEY_PRINT_SCREEN    = 283       // Key: Print screen
+    KEY_PAUSE           = 284       // Key: Pause
+    KEY_F1              = 290       // Key: F1
+    KEY_F2              = 291       // Key: F2
+    KEY_F3              = 292       // Key: F3
+    KEY_F4              = 293       // Key: F4
+    KEY_F5              = 294       // Key: F5
+    KEY_F6              = 295       // Key: F6
+    KEY_F7              = 296       // Key: F7
+    KEY_F8              = 297       // Key: F8
+    KEY_F9              = 298       // Key: F9
+    KEY_F10             = 299       // Key: F10
+    KEY_F11             = 300       // Key: F11
+    KEY_F12             = 301       // Key: F12
+    KEY_LEFT_SHIFT      = 340       // Key: Shift left
+    KEY_LEFT_CONTROL    = 341       // Key: Control left
+    KEY_LEFT_ALT        = 342       // Key: Alt left
+    KEY_LEFT_SUPER      = 343       // Key: Super left
+    KEY_RIGHT_SHIFT     = 344       // Key: Shift right
+    KEY_RIGHT_CONTROL   = 345       // Key: Control right
+    KEY_RIGHT_ALT       = 346       // Key: Alt right
+    KEY_RIGHT_SUPER     = 347       // Key: Super right
+    KEY_KB_MENU         = 348       // Key: KB menu
+    // Keypad keys
+    KEY_KP_0            = 320       // Key: Keypad 0
+    KEY_KP_1            = 321       // Key: Keypad 1
+    KEY_KP_2            = 322       // Key: Keypad 2
+    KEY_KP_3            = 323       // Key: Keypad 3
+    KEY_KP_4            = 324       // Key: Keypad 4
+    KEY_KP_5            = 325       // Key: Keypad 5
+    KEY_KP_6            = 326       // Key: Keypad 6
+    KEY_KP_7            = 327       // Key: Keypad 7
+    KEY_KP_8            = 328       // Key: Keypad 8
+    KEY_KP_9            = 329       // Key: Keypad 9
+    KEY_KP_DECIMAL      = 330       // Key: Keypad .
+    KEY_KP_DIVIDE       = 331       // Key: Keypad /
+    KEY_KP_MULTIPLY     = 332       // Key: Keypad *
+    KEY_KP_SUBTRACT     = 333       // Key: Keypad -
+    KEY_KP_ADD          = 334       // Key: Keypad +
+    KEY_KP_ENTER        = 335       // Key: Keypad Enter
+    KEY_KP_EQUAL        = 336       // Key: Keypad =
+    // Android key buttons
+    KEY_BACK            = 4         // Key: Android back button
+    KEY_MENU            = 5         // Key: Android menu button
+    KEY_VOLUME_UP       = 24        // Key: Android volume up button
+    KEY_VOLUME_DOWN     = 25        // Key: Android volume down button
+}
+
+// Add backwards compatibility support for deprecated names
+pub const MOUSE_LEFT_BUTTON:   MouseButton = .MOUSE_BUTTON_LEFT
+pub const MOUSE_RIGHT_BUTTON:  MouseButton = .MOUSE_BUTTON_RIGHT
+pub const MOUSE_MIDDLE_BUTTON: MouseButton = .MOUSE_BUTTON_MIDDLE
+
+// Mouse buttons
+pub type MouseButton = enum(i32) {
+    MOUSE_BUTTON_LEFT           = 0     // Mouse button left
+    MOUSE_BUTTON_RIGHT          = 1     // Mouse button right
+    MOUSE_BUTTON_MIDDLE         = 2     // Mouse button middle (pressed wheel)
+    MOUSE_BUTTON_SIDE           = 3     // Mouse button side (advanced mouse device)
+    MOUSE_BUTTON_EXTRA          = 4     // Mouse button extra (advanced mouse device)
+    MOUSE_BUTTON_FORWARD        = 5     // Mouse button forward (advanced mouse device)
+    MOUSE_BUTTON_BACK           = 6     // Mouse button back (advanced mouse device)
+}
+
+// Mouse cursor
+pub type MouseCursor = enum(i32) {
+    MOUSE_CURSOR_DEFAULT       = 0      // Default pointer shape
+    MOUSE_CURSOR_ARROW         = 1      // Arrow shape
+    MOUSE_CURSOR_IBEAM         = 2      // Text writing cursor shape
+    MOUSE_CURSOR_CROSSHAIR     = 3      // Cross shape
+    MOUSE_CURSOR_POINTING_HAND = 4      // Pointing hand cursor
+    MOUSE_CURSOR_RESIZE_EW     = 5      // Horizontal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NS     = 6      // Vertical resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NWSE   = 7      // Top-left to bottom-right diagonal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NESW   = 8      // The top-right to bottom-left diagonal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_ALL    = 9      // The omnidirectional resize/move cursor shape
+    MOUSE_CURSOR_NOT_ALLOWED   = 10     // The operation-not-allowed shape
+}
+
+// Gamepad buttons
+pub type GamepadButton = enum(i32) {
+    GAMEPAD_BUTTON_UNKNOWN              // Unknown button, for error checking
+    GAMEPAD_BUTTON_LEFT_FACE_UP         // Gamepad left DPAD up button
+    GAMEPAD_BUTTON_LEFT_FACE_RIGHT      // Gamepad left DPAD right button
+    GAMEPAD_BUTTON_LEFT_FACE_DOWN       // Gamepad left DPAD down button
+    GAMEPAD_BUTTON_LEFT_FACE_LEFT       // Gamepad left DPAD left button
+    GAMEPAD_BUTTON_RIGHT_FACE_UP        // Gamepad right button up (i.e. PS3: Triangle, Xbox: Y)
+    GAMEPAD_BUTTON_RIGHT_FACE_RIGHT     // Gamepad right button right (i.e. PS3: Circle, Xbox: B)
+    GAMEPAD_BUTTON_RIGHT_FACE_DOWN      // Gamepad right button down (i.e. PS3: Cross, Xbox: A)
+    GAMEPAD_BUTTON_RIGHT_FACE_LEFT      // Gamepad right button left (i.e. PS3: Square, Xbox: X)
+    GAMEPAD_BUTTON_LEFT_TRIGGER_1       // Gamepad top/back trigger left (first), it could be a trailing button
+    GAMEPAD_BUTTON_LEFT_TRIGGER_2       // Gamepad top/back trigger left (second), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_1      // Gamepad top/back trigger right (first), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_2      // Gamepad top/back trigger right (second), it could be a trailing button
+    GAMEPAD_BUTTON_MIDDLE_LEFT          // Gamepad center buttons, left one (i.e. PS3: Select)
+    GAMEPAD_BUTTON_MIDDLE               // Gamepad center buttons, middle one (i.e. PS3: PS, Xbox: XBOX)
+    GAMEPAD_BUTTON_MIDDLE_RIGHT         // Gamepad center buttons, right one (i.e. PS3: Start)
+    GAMEPAD_BUTTON_LEFT_THUMB           // Gamepad joystick pressed button left
+    GAMEPAD_BUTTON_RIGHT_THUMB          // Gamepad joystick pressed button right
+}
+
+// Gamepad axes
+pub type GamepadAxis = enum(i32) {
+    GAMEPAD_AXIS_LEFT_X        = 0      // Gamepad left stick X axis
+    GAMEPAD_AXIS_LEFT_Y        = 1      // Gamepad left stick Y axis
+    GAMEPAD_AXIS_RIGHT_X       = 2      // Gamepad right stick X axis
+    GAMEPAD_AXIS_RIGHT_Y       = 3      // Gamepad right stick Y axis
+    GAMEPAD_AXIS_LEFT_TRIGGER  = 4      // Gamepad back trigger left, pressure level: [1..-1]
+    GAMEPAD_AXIS_RIGHT_TRIGGER = 5      // Gamepad back trigger right, pressure level: [1..-1]
+}
+
+// Material map index
+pub type MaterialMapIndex = enum(i32) {
+    MATERIAL_MAP_ALBEDO                 // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+    MATERIAL_MAP_METALNESS              // Metalness material (same as: MATERIAL_MAP_SPECULAR)
+    MATERIAL_MAP_NORMAL                 // Normal material
+    MATERIAL_MAP_ROUGHNESS              // Roughness material
+    MATERIAL_MAP_OCCLUSION              // Ambient occlusion material
+    MATERIAL_MAP_EMISSION               // Emission material
+    MATERIAL_MAP_HEIGHT                 // Heightmap material
+    MATERIAL_MAP_CUBEMAP                // Cubemap material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+    MATERIAL_MAP_IRRADIANCE             // Irradiance material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+    MATERIAL_MAP_PREFILTER              // Prefilter material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+    MATERIAL_MAP_BRDF                   // Brdf material
+}
+
+pub const MATERIAL_MAP_DIFFUSE:  MaterialMapIndex = .MATERIAL_MAP_ALBEDO
+pub const MATERIAL_MAP_SPECULAR: MaterialMapIndex = .MATERIAL_MAP_METALNESS
+
+// Shader location index
+// NOTE: Some locations are tried to be set automatically on shader loading,
+// but only if default attributes/uniforms names are found, check config.h for names
+pub type ShaderLocationIndex = enum(i32) {
+    SHADER_LOC_VERTEX_POSITION          // Shader location: vertex attribute: position
+    SHADER_LOC_VERTEX_TEXCOORD01        // Shader location: vertex attribute: texcoord01
+    SHADER_LOC_VERTEX_TEXCOORD02        // Shader location: vertex attribute: texcoord02
+    SHADER_LOC_VERTEX_NORMAL            // Shader location: vertex attribute: normal
+    SHADER_LOC_VERTEX_TANGENT           // Shader location: vertex attribute: tangent
+    SHADER_LOC_VERTEX_COLOR             // Shader location: vertex attribute: color
+    SHADER_LOC_MATRIX_MVP               // Shader location: matrix uniform: model-view-projection
+    SHADER_LOC_MATRIX_VIEW              // Shader location: matrix uniform: view (camera transform)
+    SHADER_LOC_MATRIX_PROJECTION        // Shader location: matrix uniform: projection
+    SHADER_LOC_MATRIX_MODEL             // Shader location: matrix uniform: model (transform)
+    SHADER_LOC_MATRIX_NORMAL            // Shader location: matrix uniform: normal
+    SHADER_LOC_VECTOR_VIEW              // Shader location: vector uniform: view
+    SHADER_LOC_COLOR_DIFFUSE            // Shader location: vector uniform: diffuse color
+    SHADER_LOC_COLOR_SPECULAR           // Shader location: vector uniform: specular color
+    SHADER_LOC_COLOR_AMBIENT            // Shader location: vector uniform: ambient color
+    SHADER_LOC_MAP_ALBEDO               // Shader location: sampler2d texture: albedo (same as: SHADER_LOC_MAP_DIFFUSE)
+    SHADER_LOC_MAP_METALNESS            // Shader location: sampler2d texture: metalness (same as: SHADER_LOC_MAP_SPECULAR)
+    SHADER_LOC_MAP_NORMAL               // Shader location: sampler2d texture: normal
+    SHADER_LOC_MAP_ROUGHNESS            // Shader location: sampler2d texture: roughness
+    SHADER_LOC_MAP_OCCLUSION            // Shader location: sampler2d texture: occlusion
+    SHADER_LOC_MAP_EMISSION             // Shader location: sampler2d texture: emission
+    SHADER_LOC_MAP_HEIGHT               // Shader location: sampler2d texture: heightmap
+    SHADER_LOC_MAP_CUBEMAP              // Shader location: samplerCube texture: cubemap
+    SHADER_LOC_MAP_IRRADIANCE           // Shader location: samplerCube texture: irradiance
+    SHADER_LOC_MAP_PREFILTER            // Shader location: samplerCube texture: prefilter
+    SHADER_LOC_MAP_BRDF                 // Shader location: sampler2d texture: brdf
+    SHADER_LOC_VERTEX_BONEIDS           // Shader location: vertex attribute: bone indices
+    SHADER_LOC_VERTEX_BONEWEIGHTS       // Shader location: vertex attribute: bone weights
+    SHADER_LOC_MATRIX_BONETRANSFORMS    // Shader location: matrix attribute: bone transforms (animation)
+    SHADER_LOC_VERTEX_INSTANCETRANSFORM // Shader location: vertex attribute: instance transforms
+}
+
+pub const SHADER_LOC_MAP_DIFFUSE:  ShaderLocationIndex = .SHADER_LOC_MAP_ALBEDO
+pub const SHADER_LOC_MAP_SPECULAR: ShaderLocationIndex = .SHADER_LOC_MAP_METALNESS
+
+// Shader uniform data type
+pub type ShaderUniformDataType = enum(i32) {
+    SHADER_UNIFORM_FLOAT                // Shader uniform type: float
+    SHADER_UNIFORM_VEC2                 // Shader uniform type: vec2 (2 float)
+    SHADER_UNIFORM_VEC3                 // Shader uniform type: vec3 (3 float)
+    SHADER_UNIFORM_VEC4                 // Shader uniform type: vec4 (4 float)
+    SHADER_UNIFORM_INT                  // Shader uniform type: int
+    SHADER_UNIFORM_IVEC2                // Shader uniform type: ivec2 (2 int)
+    SHADER_UNIFORM_IVEC3                // Shader uniform type: ivec3 (3 int)
+    SHADER_UNIFORM_IVEC4                // Shader uniform type: ivec4 (4 int)
+    SHADER_UNIFORM_UINT                 // Shader uniform type: unsigned int
+    SHADER_UNIFORM_UIVEC2               // Shader uniform type: uivec2 (2 unsigned int)
+    SHADER_UNIFORM_UIVEC3               // Shader uniform type: uivec3 (3 unsigned int)
+    SHADER_UNIFORM_UIVEC4               // Shader uniform type: uivec4 (4 unsigned int)
+    SHADER_UNIFORM_SAMPLER2D            // Shader uniform type: sampler2d
+}
+
+// Shader attribute data types
+pub type ShaderAttributeDataType = enum(i32) {
+    SHADER_ATTRIB_FLOAT                 // Shader attribute type: float
+    SHADER_ATTRIB_VEC2                  // Shader attribute type: vec2 (2 float)
+    SHADER_ATTRIB_VEC3                  // Shader attribute type: vec3 (3 float)
+    SHADER_ATTRIB_VEC4                  // Shader attribute type: vec4 (4 float)
+}
+
+// Pixel formats
+// NOTE: Support depends on OpenGL version and platform
+pub type PixelFormat = enum(i32) {
+    PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1  // 8 bit per pixel (no alpha)
+    PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA     // 8*2 bpp (2 channels)
+    PIXELFORMAT_UNCOMPRESSED_R5G6B5         // 16 bpp
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8         // 24 bpp
+    PIXELFORMAT_UNCOMPRESSED_R5G5B5A1       // 16 bpp (1 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R4G4B4A4       // 16 bpp (4 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8A8       // 32 bpp
+    PIXELFORMAT_UNCOMPRESSED_R32            // 32 bpp (1 channel - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32      // 32*3 bpp (3 channels - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32A32   // 32*4 bpp (4 channels - float)
+    PIXELFORMAT_UNCOMPRESSED_R16            // 16 bpp (1 channel - half float)
+    PIXELFORMAT_UNCOMPRESSED_R16G16B16      // 16*3 bpp (3 channels - half float)
+    PIXELFORMAT_UNCOMPRESSED_R16G16B16A16   // 16*4 bpp (4 channels - half float)
+    PIXELFORMAT_COMPRESSED_DXT1_RGB         // 4 bpp (no alpha)
+    PIXELFORMAT_COMPRESSED_DXT1_RGBA        // 4 bpp (1 bit alpha)
+    PIXELFORMAT_COMPRESSED_DXT3_RGBA        // 8 bpp
+    PIXELFORMAT_COMPRESSED_DXT5_RGBA        // 8 bpp
+    PIXELFORMAT_COMPRESSED_ETC1_RGB         // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_RGB         // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA    // 8 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGB         // 4 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGBA        // 4 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA    // 8 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA    // 2 bpp
+}
+
+// Texture parameters: filter mode
+// NOTE 1: Filtering considers mipmaps if available in the texture
+// NOTE 2: Filter is accordingly set for minification and magnification
+pub type TextureFilter = enum(i32) {
+    TEXTURE_FILTER_POINT                // No filter, pixel approximation
+    TEXTURE_FILTER_BILINEAR             // Linear filtering
+    TEXTURE_FILTER_TRILINEAR            // Trilinear filtering (linear with mipmaps)
+    TEXTURE_FILTER_ANISOTROPIC_4X       // Anisotropic filtering 4x
+    TEXTURE_FILTER_ANISOTROPIC_8X       // Anisotropic filtering 8x
+    TEXTURE_FILTER_ANISOTROPIC_16X      // Anisotropic filtering 16x
+}
+
+// Texture parameters: wrap mode
+pub type TextureWrap = enum(i32) {
+    TEXTURE_WRAP_REPEAT                 // Repeats texture in tiled mode
+    TEXTURE_WRAP_CLAMP                  // Clamps texture to edge pixel in tiled mode
+    TEXTURE_WRAP_MIRROR_REPEAT          // Mirrors and repeats the texture in tiled mode
+    TEXTURE_WRAP_MIRROR_CLAMP           // Mirrors and clamps to border the texture in tiled mode
+}
+
+// Cubemap layouts
+pub type CubemapLayout = enum(i32) {
+    CUBEMAP_LAYOUT_AUTO_DETECT          // Automatically detect layout type
+    CUBEMAP_LAYOUT_LINE_VERTICAL        // Layout is defined by a vertical line with faces
+    CUBEMAP_LAYOUT_LINE_HORIZONTAL      // Layout is defined by a horizontal line with faces
+    CUBEMAP_LAYOUT_CROSS_THREE_BY_FOUR  // Layout is defined by a 3x4 cross with cubemap faces
+    CUBEMAP_LAYOUT_CROSS_FOUR_BY_THREE  // Layout is defined by a 4x3 cross with cubemap faces
+}
+
+// Font type, defines generation method
+pub type FontType = enum(i32) {
+    FONT_DEFAULT                        // Default font generation, anti-aliased
+    FONT_BITMAP                         // Bitmap font generation, no anti-aliasing
+    FONT_SDF                            // SDF font generation, requires external shader
+}
+
+// Color blending modes (pre-defined)
+pub type BlendMode = enum(i32) {
+    BLEND_ALPHA                         // Blend textures considering alpha (default)
+    BLEND_ADDITIVE                      // Blend textures adding colors
+    BLEND_MULTIPLIED                    // Blend textures multiplying colors
+    BLEND_ADD_COLORS                    // Blend textures adding colors (alternative)
+    BLEND_SUBTRACT_COLORS               // Blend textures subtracting colors (alternative)
+    BLEND_ALPHA_PREMULTIPLY             // Blend premultiplied textures considering alpha
+    BLEND_CUSTOM                        // Blend textures using custom src/dst factors (use rlSetBlendFactors())
+    BLEND_CUSTOM_SEPARATE               // Blend textures using custom rgb/alpha separate src/dst factors (use rlSetBlendFactorsSeparate())
+}
+
+// Gesture
+// NOTE: Provided as bit-wise flags to enable only desired gestures
+pub type Gesture = enum(i32) {
+    GESTURE_NONE        = 0             // No gesture
+    GESTURE_TAP         = 1             // Tap gesture
+    GESTURE_DOUBLETAP   = 2             // Double tap gesture
+    GESTURE_HOLD        = 4             // Hold gesture
+    GESTURE_DRAG        = 8             // Drag gesture
+    GESTURE_SWIPE_RIGHT = 16            // Swipe right gesture
+    GESTURE_SWIPE_LEFT  = 32            // Swipe left gesture
+    GESTURE_SWIPE_UP    = 64            // Swipe up gesture
+    GESTURE_SWIPE_DOWN  = 128           // Swipe down gesture
+    GESTURE_PINCH_IN    = 256           // Pinch in gesture
+    GESTURE_PINCH_OUT   = 512           // Pinch out gesture
+}
+
+// Camera system modes
+pub type CameraMode = enum(i32) {
+    CAMERA_CUSTOM                       // Camera custom, controlled by user (UpdateCamera() does nothing)
+    CAMERA_FREE                         // Camera free mode
+    CAMERA_ORBITAL                      // Camera orbital, around target, zoom supported
+    CAMERA_FIRST_PERSON                 // Camera first person
+    CAMERA_THIRD_PERSON                 // Camera third person
+}
+
+// Camera projection
+pub type CameraProjection = enum(i32) {
+    CAMERA_PERSPECTIVE                  // Perspective projection
+    CAMERA_ORTHOGRAPHIC                 // Orthographic projection
+}
+
+// N-patch layout
+pub type NPatchLayout = enum(i32) {
+    NPATCH_NINE_PATCH                   // Npatch layout: 3x3 tiles
+    NPATCH_THREE_PATCH_VERTICAL         // Npatch layout: 1x3 tiles
+    NPATCH_THREE_PATCH_HORIZONTAL       // Npatch layout: 3x1 tiles
+}
+
+// Callbacks to hook some internal functions
+// WARNING: These callbacks are intended for advanced users
+pub type TraceLogCallback     = fn(logLevel: i32, text: *u8, args: anyptr) // Logging: Redirect trace log messages
+pub type LoadFileDataCallback = fn(fileName: *u8, dataSize: *i32) -> *u8 // FileIO: Load binary data
+pub type SaveFileDataCallback = fn(fileName: *u8, data: anyptr, dataSize: i32) -> bool // FileIO: Save binary data
+pub type LoadFileTextCallback = fn(fileName: *u8) -> *u8 // FileIO: Load text data
+pub type SaveFileTextCallback = fn(fileName: *u8, text: *u8) -> bool // FileIO: Save text data
+
+//------------------------------------------------------------------------------
+// Global Variables Definition
+//------------------------------------------------------------------------------
+// It's lonely here...
+
+//------------------------------------------------------------------------------
+// Window and Graphics Device Functions (Module: core)
+//------------------------------------------------------------------------------
+
+// Window-related functions
+pub ext fn InitWindow(width: i32, height: i32, title: *u8) // Initialize window and OpenGL context
+pub ext fn CloseWindow() // Close window and unload OpenGL context
+pub ext fn WindowShouldClose() -> bool // Check if application should close (KEY_ESCAPE pressed
+pub ext fn IsWindowReady() -> bool // Check if window has been initialized successfully
+pub ext fn IsWindowFullscreen() -> bool // Check if window is currently fullscreen
+pub ext fn IsWindowHidden() -> bool // Check if window is currently hidden
+pub ext fn IsWindowMinimized() -> bool // Check if window is currently minimized
+pub ext fn IsWindowMaximized() -> bool // Check if window is currently maximized
+pub ext fn IsWindowFocused() -> bool // Check if window is currently focused
+pub ext fn IsWindowResized() -> bool // Check if window has been resized last frame
+pub ext fn IsWindowState(flag: u32) -> bool // Check if one specific window flag is enabled
+pub ext fn SetWindowState(flags: u32) // Set window configuration state using flags
+pub ext fn ClearWindowState(flags: u32) // Clear window configuration state flags
+pub ext fn ToggleFullscreen() // Toggle window state: fullscreen/windowed, resizes monitor to match window resolution
+pub ext fn ToggleBorderlessWindowed() // Toggle window state: borderless windowed, resizes window to match monitor resolution
+pub ext fn MaximizeWindow() // Set window state: maximized, if resizable
+pub ext fn MinimizeWindow() // Set window state: minimized, if resizable
+pub ext fn RestoreWindow() // Restore window from being minimized/maximized
+pub ext fn SetWindowIcon(image: Image) // Set icon for window (single image, RGBA 32bit)
+pub ext fn SetWindowIcons(images: *Image, count: i32) // Set icon for window (multiple images, RGBA 32bit)
+pub ext fn SetWindowTitle(title: *u8) // Set title for window
+pub ext fn SetWindowPosition(x: i32, y: i32) // Set window position on screen
+pub ext fn SetWindowMonitor(monitor: i32) // Set monitor for the current window
+pub ext fn SetWindowMinSize(width: i32, height: i32) // Set window minimum dimensions (for FLAG_WINDOW_RESIZABLE)
+pub ext fn SetWindowMaxSize(width: i32, height: i32) // Set window maximum dimensions (for FLAG_WINDOW_RESIZABLE)
+pub ext fn SetWindowSize(width: i32, height: i32) // Set window dimensions
+pub ext fn SetWindowOpacity(opacity: f32) // Set window opacity [0.0f..1.0f]
+pub ext fn SetWindowFocused() // Set window focused
+pub ext fn GetWindowHandle() -> anyptr // Get native window handle
+pub ext fn GetScreenWidth() -> i32 // Get current screen width
+pub ext fn GetScreenHeight() -> i32 // Get current screen height
+pub ext fn GetRenderWidth() -> i32 // Get current render width (it considers HiDPI)
+pub ext fn GetRenderHeight() -> i32 // Get current render height (it considers HiDPI)
+pub ext fn GetMonitorCount() -> i32 // Get number of connected monitors
+pub ext fn GetCurrentMonitor() -> i32 // Get current monitor where window is placed
+pub ext fn GetMonitorPosition(monitor: i32) -> Vector2 // Get specified monitor position
+pub ext fn GetMonitorWidth(monitor: i32) -> i32 // Get specified monitor width (current video mode used by monitor)
+pub ext fn GetMonitorHeight(monitor: i32) -> i32 // Get specified monitor height (current video mode used by monitor)
+pub ext fn GetMonitorPhysicalWidth(monitor: i32) -> i32 // Get specified monitor physical width in millimetres
+pub ext fn GetMonitorPhysicalHeight(monitor: i32) -> i32 // Get specified monitor physical height in millimetres
+pub ext fn GetMonitorRefreshRate(monitor: i32) -> i32 // Get specified monitor refresh rate
+pub ext fn GetWindowPosition() -> Vector2 // Get window position XY on monitor
+pub ext fn GetWindowScaleDPI() -> Vector2 // Get window scale DPI factor
+pub ext fn GetMonitorName(monitor: i32) -> *u8 // Get the human-readable, UTF-8 encoded name of the specified monitor
+pub ext fn SetClipboardText(text: *u8) // Set clipboard text content
+pub ext fn GetClipboardText() -> *u8 // Get clipboard text content
+pub ext fn GetClipboardImage() -> Image // Get clipboard image content
+pub ext fn EnableEventWaiting() // Enable waiting for events on EndDrawing(), no automatic event polling
+pub ext fn DisableEventWaiting() // Disable waiting for events on EndDrawing(), automatic events polling
+
+// Cursor-related functions
+pub ext fn ShowCursor() // Show cursor
+pub ext fn HideCursor() // Hide cursor
+pub ext fn IsCursorHidden() -> bool // Check if cursor is not visible
+pub ext fn EnableCursor() // Enable cursor (unlock cursor)
+pub ext fn DisableCursor() // Disable cursor (lock cursor)
+pub ext fn IsCursorOnScreen() -> bool // Check if cursor is on the screen
+
+// Drawing-related functions
+pub ext fn ClearBackground(color: Color) // Clear background (framebuffer) to color
+pub ext fn BeginDrawing() // Begin canvas (framebuffer) drawing
+pub ext fn EndDrawing() // End canvas (framebuffer) drawing and swap buffers (double buffering)
+pub ext fn BeginMode2D(camera: Camera2D) // Begin 2D mode with custom camera (2D)
+pub ext fn EndMode2D() // End 2D mode with custom camera
+pub ext fn BeginMode3D(camera: Camera3D) // Begin 3D mode with custom camera (3D)
+pub ext fn EndMode3D() // End 3D mode and returns to default 2D orthographic mode
+pub ext fn BeginTextureMode(target: RenderTexture2D) // Begin drawing to render texture
+pub ext fn EndTextureMode() // End drawing to render texture
+pub ext fn BeginShaderMode(shader: Shader) // Begin custom shader drawing
+pub ext fn EndShaderMode() // End custom shader drawing (use default shader)
+pub ext fn BeginBlendMode(mode: i32) // Begin blending mode (alpha, additive, multiplied, subtract, custom)
+pub ext fn EndBlendMode() // End blending mode (reset to default: alpha blending)
+pub ext fn BeginScissorMode(x: i32, y: i32, width: i32, height: i32) // Begin scissor mode (define screen area for following drawing)
+pub ext fn EndScissorMode() // End scissor mode
+pub ext fn BeginVrStereoMode(config: VrStereoConfig) // Begin stereo rendering (requires VR simulator)
+pub ext fn EndVrStereoMode() // End stereo rendering (requires VR simulator)
+
+// VR stereo config functions for VR simulator
+pub ext fn LoadVrStereoConfig(device: VrDeviceInfo) -> VrStereoConfig // Load VR stereo config for VR simulator device parameters
+pub ext fn UnloadVrStereoConfig(config: VrStereoConfig) // Unload VR stereo config
+
+// Shader management functions
+// NOTE: Shader functionality is not available on OpenGL 1.1
+pub ext fn LoadShader(vsFileName: *u8, fsFileName: *u8) -> Shader // Load shader from files and bind default locations
+pub ext fn LoadShaderFromMemory(vsCode: *u8, fsCode: *u8) -> Shader // Load shader from code strings and bind default locations
+pub ext fn IsShaderValid(shader: Shader) -> bool // Check if shader is valid (loaded on GPU)
+pub ext fn GetShaderLocation(shader: Shader, uniformName: *u8) -> i32 // Get shader uniform location
+pub ext fn GetShaderLocationAttrib(shader: Shader, attribName: *u8) -> i32 // Get shader attribute location
+pub ext fn SetShaderValue(shader: Shader, locIndex: i32, value: anyptr, uniformType: i32) // Set shader uniform value
+pub ext fn SetShaderValueV(shader: Shader, locIndex: i32, value: anyptr, uniformType: i32, count: i32) // Set shader uniform value vector
+pub ext fn SetShaderValueMatrix(shader: Shader, locIndex: i32, mat: Matrix) // Set shader uniform value (matrix 4x4)
+pub ext fn SetShaderValueTexture(shader: Shader, locIndex: i32, texture: Texture2D) // Set shader uniform value and bind the texture (sampler2d)
+pub ext fn UnloadShader(shader: Shader) // Unload shader from GPU memory (VRAM)
+
+// Screen-space-related functions
+pub ext fn GetScreenToWorldRay(position: Vector2, camera: Camera) -> Ray // Get a ray trace from screen position (i.e mouse)
+pub ext fn GetScreenToWorldRayEx(position: Vector2, camera: Camera, width: i32, height: i32) -> Ray // Get a ray trace from screen position (i.e mouse) in a viewport
+pub ext fn GetWorldToScreen(position: Vector3, camera: Camera) -> Vector2 // Get screen space position for a 3d world space position
+pub ext fn GetWorldToScreenEx(position: Vector3, camera: Camera, width: i32, height: i32) -> Vector2 // Get sized screen space position for a 3d world space position
+pub ext fn GetWorldToScreen2D(position: Vector2, camera: Camera2D) -> Vector2 // Get screen space position for a 2d camera world space position
+pub ext fn GetScreenToWorld2D(position: Vector2, camera: Camera2D) -> Vector2 // Get world space position for a 2d camera screen space position
+pub ext fn GetCameraMatrix(camera: Camera) -> Matrix // Get camera transform matrix (view matrix)
+pub ext fn GetCameraMatrix2D(camera: Camera2D) -> Matrix // Get camera 2d transform matrix
+
+// Timing-related functions
+pub ext fn SetTargetFPS(fps: i32) // Set target FPS (maximum)
+pub ext fn GetFrameTime() -> f32 // Get time in seconds for last frame dra
+pub ext fn GetTime() -> f64 // Get elapsed time in seconds since Init
+pub ext fn GetFPS() -> i32 // Get current FPS
+
+// Custom frame control functions
+// NOTE: Those functions are intended for advanced users that want full control over the frame processing
+// By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timing + PollInputEvents()
+// To avoid that behaviour and control frame processes manually, enable in config.h: SUPPORT_CUSTOM_FRAME_CONTROL
+pub ext fn SwapScreenBuffer() // Swap back buffer with front buffer (screen drawing)
+pub ext fn PollInputEvents() // Register all input events
+pub ext fn WaitTime(seconds: f64) // Wait for some time (halt program execution)
+
+// Random values generation functions
+pub ext fn SetRandomSeed(seed: u32) // Set the seed for the random number generator
+pub ext fn GetRandomValue(min: i32, max: i32) -> i32 // Get a random value between min and max (both included)
+pub ext fn LoadRandomSequence(count: u32, min: i32, max: i32) -> *i32 // Load random values sequence, no values repeated
+pub ext fn UnloadRandomSequence(sequence: *i32) // Unload random values sequence
+
+// Misc. functions
+pub ext fn TakeScreenshot(fileName: *u8) // Takes a screenshot of current screen (filename extension defines format)
+pub ext fn SetConfigFlags(flags: ConfigFlags) // Set up init configuration flags (view FLAGS)
+pub ext fn OpenURL(url: *u8) // Open URL with default system browser (if available)
+
+// Logging system
+pub ext fn SetTraceLogLevel(logLevel: TraceLogLevel) // Set the current threshold (minimum) log level
+pub ext fn TraceLog(logLevel: TraceLogLevel, text: *u8, ...) // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR...)
+pub ext fn SetTraceLogCallback(callback: TraceLogCallback) // Set custom trace log
+
+// Memory management, using internal allocators
+pub ext fn MemAlloc(size: u32) -> anyptr // Internal memory allocator
+pub ext fn MemRealloc(ptr: anyptr, size: u32) -> anyptr // Internal memory reallocator
+pub ext fn MemFree(ptr: anyptr) // Internal memory free
+
+// File system management functions
+pub ext fn LoadFileData(fileName: *u8, dataSize: *i32) -> *u8 // Load file data as byte array (read)
+pub ext fn UnloadFileData(data: *u8) // Unload file data allocated by LoadFileData()
+pub ext fn SaveFileData(fileName: *u8, data: anyptr, dataSize: i32) -> bool // Save data to file from byte array (write), returns true on success
+pub ext fn ExportDataAsCode(data: *u8, dataSize: i32, fileName: *u8) -> bool // Export data to code (.h), returns true on success
+pub ext fn LoadFileText(fileName: *u8) -> *u8 // Load text data from file (read), returns a '\0' terminated string
+pub ext fn UnloadFileText(text: *u8) // Unload file text data allocated by LoadFileText()
+pub ext fn SaveFileText(fileName: *u8, text: *u8) -> bool // Save text data to file (write), string must be '\0' terminated, returns true on success
+
+// File access custom callbacks
+// WARNING: Callbacks setup is intended for advanced users
+pub ext fn SetLoadFileDataCallback(callback: LoadFileDataCallback) // Set custom file binary data loader
+pub ext fn SetSaveFileDataCallback(callback: SaveFileDataCallback) // Set custom file binary data saver
+pub ext fn SetLoadFileTextCallback(callback: LoadFileTextCallback) // Set custom file text data loader
+pub ext fn SetSaveFileTextCallback(callback: SaveFileTextCallback) // Set custom file text data saver
+
+pub ext fn FileRename(fileName: *u8, fileRename: *u8) -> i32 // Rename file (if exists), returns 0 on success
+pub ext fn FileRemove(fileName: *u8) -> i32 // Remove file (if exists), returns 0 on success
+pub ext fn FileCopy(srcPath: *u8, dstPath: *u8) -> i32 // Copy file from one path to another, dstPath created if it doesn't exist, returns 0 on success
+pub ext fn FileMove(srcPath: *u8, dstPath: *u8) -> i32 // Move file from one directory to another, dstPath created if it doesn't exist, returns 0 on success
+pub ext fn FileTextReplace(fileName: *u8, search: *u8, replacement: *u8) -> i32 // Replace text in an existing file, returns 0 on success
+pub ext fn FileTextFindIndex(fileName: *u8, search: *u8) -> i32 // Find text in existing file, returns -1 if index not found or index otherwise
+pub ext fn FileExists(fileName: *u8) -> bool // Check if file exists
+pub ext fn DirectoryExists(dirPath: *u8) -> bool // Check if directory path exists
+pub ext fn IsFileExtension(fileName: *u8, ext: *u8) -> bool // Check file extension (recommended include point: .png, .wav)
+pub ext fn GetFileLength(fileName: *u8) -> i32 // Get file length in bytes (NOTE: GetFileSize() conflicts with windows.h)
+pub ext fn GetFileModTime(fileName: *u8) -> long // Get file modification time (last write time)
+pub ext fn GetFileExtension(fileName: *u8) -> *u8 // Get pointer to extension for a filename string (includes dot: '.png')
+pub ext fn GetFileName(filePath: *u8) -> *u8 // Get pointer to filename for a path string
+pub ext fn GetFileNameWithoutExt(filePath: *u8) -> *u8 // Get filename string without extension (uses static string)
+pub ext fn GetDirectoryPath(filePath: *u8) -> *u8 // Get full path for a provided fileName with path (uses static string)
+pub ext fn GetPrevDirectoryPath(dirPath: *u8) -> *u8 // Get previous directory path for a provided path (uses static string)
+pub ext fn GetWorkingDirectory() -> *u8 // Get current working directory (uses static string)
+pub ext fn GetApplicationDirectory() -> *u8 // Get the directory of the running application (uses static string)
+pub ext fn MakeDirectory(dirPath: *u8) -> i32 // Create directories (including full path requested), returns 0 on success
+pub ext fn ChangeDirectory(dirPath: *u8) -> i32 // Change working directory, returns 0 on success
+pub ext fn IsPathFile(path: *u8) -> bool // Check if provided path points to a file
+pub ext fn IsPathDirectory(path: *u8) -> bool // Check if provided path points to a directory
+pub ext fn IsPathAbsolute(path: *u8) -> bool // Check if provided path is an absolute path
+pub ext fn IsFileNameValid(fileName: *u8) -> bool // Check if fileName is valid for the platform/OS
+pub ext fn LoadDirectoryFiles(dirPath: *u8) -> FilePathList // Load directory filepaths, files and directories, no subdirs scan
+pub ext fn LoadDirectoryFilesEx(basePath: *u8, filter: *u8, scanSubdirs: bool) -> FilePathList // Load directory filepaths with extension filtering and subdir scan; some filters available: '*.*','FILES*','DIRS*'
+pub ext fn UnloadDirectoryFiles(files: FilePathList) // Unload filepaths
+pub ext fn IsFileDropped() -> bool // Check if file has been dropped into window
+pub ext fn LoadDroppedFiles() -> FilePathList // Load dropped filepaths
+pub ext fn UnloadDroppedFiles(files: FilePathList) // Unload dropped filepaths
+pub ext fn GetDirectoryFileCount(dirPath: *u8) -> u32 // Get the file count in a directory
+pub ext fn GetDirectoryFileCountEx(basePath: *u8, filter: *u8, scanSubdirs: bool) -> u32 // Get the file count in a directory with extension filtering and recursive directory scan. Use 'DIR' in the filter string to include directories in the result
+
+// Compression/Encoding functionality
+pub ext fn CompressData(data: *u8, dataSize: i32, compDataSize: *i32) -> *u8 // Compress data (DEFLATE algorithm), memory must be MemFree()
+pub ext fn DecompressData(compData: *u8, compDataSize: i32, dataSize: *i32) -> *u8 // Decompress data (DEFLATE algorithm), memory must be MemFree()
+pub ext fn EncodeDataBase64(data: *u8, dataSize: i32, outputSize: *i32) -> *u8 // Encode data to Base64 string (includes NULL terminator), memory must be MemFree()
+pub ext fn DecodeDataBase64(text: *u8, outputSize: *i32) -> *u8 // Decode Base64 string (expected NULL terminated), memory must be MemFree()
+pub ext fn ComputeCRC32(data: *u8, dataSize: i32) -> u32 // Compute CRC32 hash code
+pub ext fn ComputeMD5(data: *u8, dataSize: i32) -> *u32 // Compute MD5 hash code, returns static int[4] (16 bytes)
+pub ext fn ComputeSHA1(data: *u8, dataSize: i32) -> *u32 // Compute SHA1 hash code, returns static int[5] (20 bytes)
+pub ext fn ComputeSHA256(data: *u8, dataSize: i32) -> *u32 // Compute SHA256 hash code, returns static int[8] (32 bytes)
+
+// Automation events functionality
+pub ext fn LoadAutomationEventList(fileName: *u8) -> AutomationEventList // Load automation events list from file, NULL for empty list, capacity = MAX_AUTOMATION_EVENTS
+pub ext fn UnloadAutomationEventList(list: AutomationEventList) // Unload automation events list from file
+pub ext fn ExportAutomationEventList(list: AutomationEventList, fileName: *u8) -> bool // Export automation events list as text file
+pub ext fn SetAutomationEventList(list: *AutomationEventList) // Set automation event list to record to
+pub ext fn SetAutomationEventBaseFrame(frame: i32) // Set automation event internal base frame to start recording
+pub ext fn StartAutomationEventRecording() // Start recording automation events (AutomationEventList must be set)
+pub ext fn StopAutomationEventRecording() // Stop recording automation events
+pub ext fn PlayAutomationEvent(event: AutomationEvent) // Play a recorded automation event
+
+//------------------------------------------------------------------------------
+// Input Handling Functions (Module: core)
+//------------------------------------------------------------------------------
+
+// Input-related functions: keyboard
+pub ext fn IsKeyPressed(key: KeyboardKey) -> bool // Check if key has been pressed once
+pub ext fn IsKeyPressedRepeat(key: KeyboardKey) -> bool // Check if key has been pressed again
+pub ext fn IsKeyDown(key: KeyboardKey) -> bool // Check if key is being pressed
+pub ext fn IsKeyReleased(key: KeyboardKey) -> bool // Check if key has been released once
+pub ext fn IsKeyUp(key: KeyboardKey) -> bool // Check if key is NOT being pressed
+pub ext fn GetKeyPressed() -> KeyboardKey // Get key pressed (keycode), call it multiple times for keys queued, returns 0 when the queue is empty
+pub ext fn GetCharPressed() -> i32 // Get char pressed (unicode), call it multiple times for chars queued, returns 0 when the queue is empty
+pub ext fn GetKeyName(key: KeyboardKey) -> *u8 // Get name of a QWERTY key on the current keyboard layout (eg returns string 'q' for KEY_A on an AZERTY keyboard)
+pub ext fn SetExitKey(key: KeyboardKey) // Set a custom key to exit program (default is ESC)
+
+// Input-related functions: gamepads
+pub ext fn IsGamepadAvailable(gamepad: i32) -> bool // Check if gamepad is available
+pub ext fn GetGamepadName(gamepad: i32) -> *u8 // Get gamepad internal name id
+pub ext fn IsGamepadButtonPressed(gamepad: i32, button: GamepadButton) -> bool // Check if gamepad button has been pressed once
+pub ext fn IsGamepadButtonDown(gamepad: i32, button: GamepadButton) -> bool // Check if gamepad button is being pressed
+pub ext fn IsGamepadButtonReleased(gamepad: i32, button: GamepadButton) -> bool // Check if gamepad button has been released once
+pub ext fn IsGamepadButtonUp(gamepad: i32, button: GamepadButton) -> bool // Check if gamepad button is NOT being pressed
+pub ext fn GetGamepadButtonPressed() -> i32 // Get the last gamepad button pressed
+pub ext fn GetGamepadAxisCount(gamepad: i32) -> i32 // Get axis count for a gamepad
+pub ext fn GetGamepadAxisMovement(gamepad: i32, axis: i32) -> f32 // Get movement value for a gamepad axis
+pub ext fn SetGamepadMappings(mappings: *u8) -> i32 // Set internal gamepad mappings (SDL_GameControllerDB)
+pub ext fn SetGamepadVibration(gamepad: i32, leftMotor: f32, rightMotor: f32, duration: f32) // Set gamepad vibration for both motors (duration in seconds)
+
+// Input-related functions: mouse
+pub ext fn IsMouseButtonPressed(button: MouseButton) -> bool // Check if mouse button has been pressed once
+pub ext fn IsMouseButtonDown(button: MouseButton) -> bool // Check if mouse button is being pressed
+pub ext fn IsMouseButtonReleased(button: MouseButton) -> bool // Check if mouse button has been released once
+pub ext fn IsMouseButtonUp(button: MouseButton) -> bool // Check if mouse button is NOT being pressed
+pub ext fn GetMouseX() -> i32 // Get mouse position X
+pub ext fn GetMouseY() -> i32 // Get mouse position Y
+pub ext fn GetMousePosition() -> Vector2 // Get mouse position XY
+pub ext fn GetMouseDelta() -> Vector2 // Get mouse delta between frames
+pub ext fn SetMousePosition(x: i32, y: i32) // Set mouse position XY
+pub ext fn SetMouseOffset(offsetX: i32, offsetY: i32) // Set mouse offset
+pub ext fn SetMouseScale(scaleX: f32, scaleY: f32) // Set mouse scaling
+pub ext fn GetMouseWheelMove() -> f32 // Get mouse wheel movement for X or Y, whichever is larger
+pub ext fn GetMouseWheelMoveV() -> Vector2 // Get mouse wheel movement for both X and Y
+pub ext fn SetMouseCursor(cursor: i32) // Set mouse cursor
+
+// Input-related functions: touch
+pub ext fn GetTouchX() -> i32 // Get touch position X for touch point 0 (relative to screen size)
+pub ext fn GetTouchY() -> i32 // Get touch position Y for touch point 0 (relative to screen size)
+pub ext fn GetTouchPosition(index: i32) -> Vector2 // Get touch position XY for a touch point index (relative to screen size)
+pub ext fn GetTouchPointId(index: i32) -> i32 // Get touch point identifier for provided index
+pub ext fn GetTouchPointCount() -> i32 // Get number of touch points
+
+//------------------------------------------------------------------------------
+// Gestures and Touch Handling Functions (Module: rgestures)
+//------------------------------------------------------------------------------
+pub ext fn SetGesturesEnabled(flags: u32) // Enable a set of gestures using flags
+pub ext fn IsGestureDetected(gesture: u32) -> bool // Check if gesture has been detected
+pub ext fn GetGestureDetected() -> i32 // Get latest detected gesture
+pub ext fn GetGestureHoldDuration() -> f32 // Get gesture hold time in seconds
+pub ext fn GetGestureDragVector() -> Vector2 // Get gesture drag vector
+pub ext fn GetGestureDragAngle() -> f32 // Get gesture drag angle
+pub ext fn GetGesturePinchVector() -> Vector2 // Get gesture pinch delta
+pub ext fn GetGesturePinchAngle() -> f32 // Get gesture pinch angle
+
+//------------------------------------------------------------------------------
+// Camera System Functions (Module: rcamera)
+//------------------------------------------------------------------------------
+pub ext fn UpdateCamera(camera: *Camera, mode: CameraMode) // Update camera position for selected mode
+pub ext fn UpdateCameraPro(camera: *Camera, movement: Vector3, rotation: Vector3, zoom: f32) // Update camera movement/rotation
+
+//------------------------------------------------------------------------------
+// Basic Shapes Drawing Functions (Module: shapes)
+//------------------------------------------------------------------------------
+// Set texture and rectangle to be used on shapes drawing
+// NOTE: It can be useful when using basic shapes and one single font,
+// defining a font char white rectangle would allow drawing everything in a single draw call
+pub ext fn SetShapesTexture(texture: Texture2D, rec: Rectangle) // Set texture and rectangle to be used on shapes drawing
+pub ext fn GetShapesTexture() -> Texture2D // Get texture that is used for shapes drawing
+pub ext fn GetShapesTextureRectangle() -> Rectangle // Get texture source rectangle that is used for shapes drawing
+
+// Basic shapes drawing functions
+pub ext fn DrawPixel(posX: i32, posY: i32, color: Color) // Draw a pixel using geometry [Can be slow, use with care]
+pub ext fn DrawPixelV(position: Vector2, color: Color) // Draw a pixel using geometry (Vector version) [Can be slow, use with care]
+pub ext fn DrawLine(startPosX: i32, startPosY: i32, endPosX: i32, endPosY: i32, color: Color) // Draw a line
+pub ext fn DrawLineV(startPos: Vector2, endPos: Vector2, color: Color) // Draw a line (using gl lines)
+pub ext fn DrawLineEx(startPos: Vector2, endPos: Vector2, thick: f32, color: Color) // Draw a line (using triangles/quads)
+pub ext fn DrawLineStrip(points: *Vector2, pointCount: i32, color: Color) // Draw lines sequence (using gl lines)
+pub ext fn DrawLineBezier(startPos: Vector2, endPos: Vector2, thick: f32, color: Color) // Draw line segment cubic-bezier in-out interpolation
+pub ext fn DrawLineDashed(startPos: Vector2, endPos: Vector2, dashSize: i32, spaceSize: i32, color: Color) // Draw a dashed line
+pub ext fn DrawTriangle(v1: Vector2, v2: Vector2, v3: Vector2, color: Color) // Draw a color-filled triangle, counter-clockwise vertex order
+pub ext fn DrawTriangleGradient(v1: Vector2, v2: Vector2, v3: Vector2, c1: Color, c2: Color, c3: Color) // Draw triangle with interpolated colors, counter-clockwise vertex/color order
+pub ext fn DrawTriangleLines(v1: Vector2, v2: Vector2, v3: Vector2, color: Color) // Draw triangle outline, counter-clockwise vertex order
+pub ext fn DrawTriangleFan(points: *Vector2, pointCount: i32, color: Color) // Draw a triangle fan defined by points (first vertex is the center)
+pub ext fn DrawTriangleStrip(points: *Vector2, pointCount: i32, color: Color) // Draw a triangle strip defined by points
+pub ext fn DrawRectangle(posX: i32, posY: i32, width: i32, height: i32, color: Color) // Draw a color-filled rectangle
+pub ext fn DrawRectangleV(position: Vector2, size: Vector2, color: Color) // Draw a color-filled rectangle (Vector version)
+pub ext fn DrawRectangleRec(rec: Rectangle, color: Color) // Draw a color-filled rectangle
+pub ext fn DrawRectanglePro(rec: Rectangle, origin: Vector2, rotation: f32, color: Color) // Draw a color-filled rectangle with pro parameters
+pub ext fn DrawRectangleGradientV(posX: i32, posY: i32, width: i32, height: i32, top: Color, bottom: Color) // Draw a vertical-gradient-filled rectangle
+pub ext fn DrawRectangleGradientH(posX: i32, posY: i32, width: i32, height: i32, left: Color, right: Color) // Draw a horizontal-gradient-filled rectangle
+pub ext fn DrawRectangleGradientEx(rec: Rectangle, col1: Color, col2: Color, col3: Color, col4: Color) // Draw a gradient-filled rectangle with custom vertex colors, counter-clockwise color order
+pub ext fn DrawRectangleLines(posX: i32, posY: i32, width: i32, height: i32, color: Color) // Draw rectangle outline
+pub ext fn DrawRectangleLinesEx(rec: Rectangle, thick: f32, color: Color) // Draw rectangle outline with line thickness
+pub ext fn DrawRectangleRounded(rec: Rectangle, roundness: f32, segments: i32, color: Color) // Draw rectangle with rounded edges
+pub ext fn DrawRectangleRoundedLines(rec: Rectangle, roundness: f32, segments: i32, color: Color) // Draw rectangle lines with rounded edges
+pub ext fn DrawRectangleRoundedLinesEx(rec: Rectangle, roundness: f32, segments: i32, thick: f32, color: Color) // Draw rectangle lines with rounded edges outline and line thickness
+pub ext fn DrawPoly(center: Vector2, sides: i32, radius: f32, rotation: f32, color: Color) // Draw a polygon of n sides
+pub ext fn DrawPolyLines(center: Vector2, sides: i32, radius: f32, rotation: f32, color: Color) // Draw a polygon outline of n sides
+pub ext fn DrawPolyLinesEx(center: Vector2, sides: i32, radius: f32, rotation: f32, thick: f32, color: Color) // Draw a polygon outline of n sides with line thickness
+pub ext fn DrawCircle(centerX: i32, centerY: i32, radius: f32, color: Color) // Draw a color-filled circle
+pub ext fn DrawCircleV(center: Vector2, radius: f32, color: Color) // Draw a color-filled circle (Vector version)
+pub ext fn DrawCircleGradient(center: Vector2, radius: f32, inner: Color, outer: Color) // Draw a gradient-filled circle
+pub ext fn DrawCircleSector(center: Vector2, radius: f32, startAngle: f32, endAngle: f32, segments: i32, color: Color) // Draw a piece of a circle
+pub ext fn DrawCircleSectorLines(center: Vector2, radius: f32, startAngle: f32, endAngle: f32, segments: i32, color: Color) // Draw circle sector outline
+pub ext fn DrawCircleLines(centerX: i32, centerY: i32, radius: f32, color: Color) // Draw circle outline
+pub ext fn DrawCircleLinesV(center: Vector2, radius: f32, color: Color) // Draw circle outline (Vector version)
+pub ext fn DrawCircleLinesEx(center: Vector2, radius: f32, thick: f32, color: Color) // Draw circle outline with line thickness
+pub ext fn DrawEllipse(centerX: i32, centerY: i32, radiusH: f32, radiusV: f32, color: Color) // Draw ellipse
+pub ext fn DrawEllipseV(center: Vector2, radiusH: f32, radiusV: f32, color: Color) // Draw ellipse (Vector version)
+pub ext fn DrawEllipseLines(centerX: i32, centerY: i32, radiusH: f32, radiusV: f32, color: Color) // Draw ellipse outline
+pub ext fn DrawEllipseLinesV(center: Vector2, radiusH: f32, radiusV: f32, color: Color) // Draw ellipse outline (Vector version)
+pub ext fn DrawRing(center: Vector2, innerRadius: f32, outerRadius: f32, startAngle: f32, endAngle: f32, segments: i32, color: Color) // Draw ring
+pub ext fn DrawRingLines(center: Vector2, innerRadius: f32, outerRadius: f32, startAngle: f32, endAngle: f32, segments: i32, color: Color) // Draw ring outline
+
+// Splines drawing functions
+pub ext fn DrawSplineLinear(points: *Vector2, pointCount: i32, thick: f32, color: Color) // Draw spline: Linear, minimum 2 points
+pub ext fn DrawSplineBasis(points: *Vector2, pointCount: i32, thick: f32, color: Color) // Draw spline: B-Spline, minimum 4 points
+pub ext fn DrawSplineCatmullRom(points: *Vector2, pointCount: i32, thick: f32, color: Color) // Draw spline: Catmull-Rom, minimum 4 points
+pub ext fn DrawSplineBezierQuadratic(points: *Vector2, pointCount: i32, thick: f32, color: Color) // Draw spline: Quadratic Bezier, minimum 3 points (1 control point): [p1, c2, p3, c4...]
+pub ext fn DrawSplineBezierCubic(points: *Vector2, pointCount: i32, thick: f32, color: Color) // Draw spline: Cubic Bezier, minimum 4 points (2 control points): [p1, c2, c3, p4, c5, c6...]
+pub ext fn DrawSplineSegmentLinear(p1: Vector2, p2: Vector2, thick: f32, color: Color) // Draw spline segment: Linear, 2 points
+pub ext fn DrawSplineSegmentBasis(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2, thick: f32, color: Color) // Draw spline segment: B-Spline, 4 points
+pub ext fn DrawSplineSegmentCatmullRom(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2, thick: f32, color: Color) // Draw spline segment: Catmull-Rom, 4 points
+pub ext fn DrawSplineSegmentBezierQuadratic(p1: Vector2, c2: Vector2, p3: Vector2, thick: f32, color: Color) // Draw spline segment: Quadratic Bezier, 2 points, 1 control point
+pub ext fn DrawSplineSegmentBezierCubic(p1: Vector2, c2: Vector2, c3: Vector2, p4: Vector2, thick: f32, color: Color) // Draw spline segment: Cubic Bezier, 2 points, 2 control points
+
+// Spline segment point evaluation functions, for a provided t [0.0f .. 1.0f]
+pub ext fn GetSplinePointLinear(startPos: Vector2, endPos: Vector2, t: f32) -> Vector2 // Get (evaluate) spline point: Linear
+pub ext fn GetSplinePointBasis(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2, t: f32) -> Vector2 // Get (evaluate) spline point: B-Spline
+pub ext fn GetSplinePointCatmullRom(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2, t: f32) -> Vector2 // Get (evaluate) spline point: Catmull-Rom
+pub ext fn GetSplinePointBezierQuadratic(p1: Vector2, c2: Vector2, p3: Vector2, t: f32) -> Vector2 // Get (evaluate) spline point: Quadratic Bezier
+pub ext fn GetSplinePointBezierCubic(p1: Vector2, c2: Vector2, c3: Vector2, p4: Vector2, t: f32) -> Vector2 // Get (evaluate) spline point: Cubic Bezier
+
+// Basic shapes collision detection functions
+pub ext fn CheckCollisionRecs(rec1: Rectangle, rec2: Rectangle) -> bool // Check collision between two rectangles
+pub ext fn CheckCollisionCircles(center1: Vector2, radius1: f32, center2: Vector2, radius2: f32) -> bool // Check collision between two circles
+pub ext fn CheckCollisionCircleRec(center: Vector2, radius: f32, rec: Rectangle) -> bool // Check collision between circle and rectangle
+pub ext fn CheckCollisionCircleLine(center: Vector2, radius: f32, p1: Vector2, p2: Vector2) -> bool // Check if circle collides with a line created between two points [p1] and [p2]
+pub ext fn CheckCollisionPointRec(point: Vector2, rec: Rectangle) -> bool // Check if point is inside rectangle
+pub ext fn CheckCollisionPointCircle(point: Vector2, center: Vector2, radius: f32) -> bool // Check if point is inside circle
+pub ext fn CheckCollisionPointTriangle(point: Vector2, p1: Vector2, p2: Vector2, p3: Vector2) -> bool // Check if point is inside a triangle
+pub ext fn CheckCollisionPointLine(point: Vector2, p1: Vector2, p2: Vector2, threshold: i32) -> bool // Check if point belongs to line created between two points [p1] and [p2] with defined margin in pixels [threshold]
+pub ext fn CheckCollisionPointPoly(point: Vector2, points: *Vector2, pointCount: i32) -> bool // Check if point is within a polygon described by array of vertices
+pub ext fn CheckCollisionLines(startPos1: Vector2, endPos1: Vector2, startPos2: Vector2, endPos2: Vector2, collisionPoint: *Vector2) -> bool // Check the collision between two lines defined by two points each, returns collision point by reference
+pub ext fn GetCollisionRec(rec1: Rectangle, rec2: Rectangle) -> Rectangle // Get collision rectangle for two rectangles collision
+
+//------------------------------------------------------------------------------
+// Texture Loading and Drawing Functions (Module: textures)
+//------------------------------------------------------------------------------
+
+// Image loading functions
+// NOTE: These functions do not require GPU access
+pub ext fn LoadImage(fileName: *u8) -> Image // Load image from file into CPU memory (RAM)
+pub ext fn LoadImageRaw(fileName: *u8, width: i32, height: i32, format: i32, headerSize: i32) -> Image // Load image from RAW file data
+pub ext fn LoadImageAnim(fileName: *u8, frames: *i32) -> Image // Load image sequence from file (frames appended to image.data)
+pub ext fn LoadImageAnimFromMemory(fileType: *u8, fileData: *u8, dataSize: i32, frames: *i32) -> Image // Load image sequence from memory buffer
+pub ext fn LoadImageFromMemory(fileType: *u8, fileData: *u8, dataSize: i32) -> Image // Load image from memory buffer, fileType refers to extension: i.e. '.png'
+pub ext fn LoadImageFromTexture(texture: Texture2D) -> Image // Load image from GPU texture data
+pub ext fn LoadImageFromScreen() -> Image // Load image from screen buffer (screenshot)
+pub ext fn IsImageValid(image: Image) -> bool // Check if an image is valid (data and parameters)
+pub ext fn UnloadImage(image: Image) // Unload image from CPU memory (RAM)
+pub ext fn ExportImage(image: Image, fileName: *u8) -> bool // Export image data to file, returns true on success
+pub ext fn ExportImageToMemory(image: Image, fileType: *u8, fileSize: *i32) -> *u8 // Export image to memory buffer, memory must be MemFree()
+pub ext fn ExportImageAsCode(image: Image, fileName: *u8) -> bool // Export image as code file defining an array of bytes, returns true on success
+
+// Image generation functions
+pub ext fn GenImageColor(width: i32, height: i32, color: Color) -> Image // Generate image: plain color
+pub ext fn GenImageGradientLinear(width: i32, height: i32, direction: i32, start: Color, end: Color) -> Image // Generate image: linear gradient, direction in degrees [0..360], 0=Vertical gradient
+pub ext fn GenImageGradientRadial(width: i32, height: i32, density: f32, inner: Color, outer: Color) -> Image // Generate image: radial gradient
+pub ext fn GenImageGradientSquare(width: i32, height: i32, density: f32, inner: Color, outer: Color) -> Image // Generate image: square gradient
+pub ext fn GenImageChecked(width: i32, height: i32, checksX: i32, checksY: i32, col1: Color, col2: Color) -> Image // Generate image: checked
+pub ext fn GenImageWhiteNoise(width: i32, height: i32, factor: f32) -> Image // Generate image: white noise
+pub ext fn GenImagePerlinNoise(width: i32, height: i32, offsetX: i32, offsetY: i32, scale: f32) -> Image // Generate image: perlin noise
+pub ext fn GenImageCellular(width: i32, height: i32, tileSize: i32) -> Image // Generate image: cellular algorithm, bigger tileSize means bigger cells
+pub ext fn GenImageText(width: i32, height: i32, text: *u8) -> Image // Generate image: grayscale image from text data
+
+// Image manipulation functions
+pub ext fn ImageCopy(image: Image) -> Image // Create an image duplicate (useful for transformations)
+pub ext fn ImageFromImage(image: Image, rec: Rectangle) -> Image // Create an image from another image piece
+pub ext fn ImageFromChannel(image: Image, selectedChannel: i32) -> Image // Create an image from a selected channel of another image (GRAYSCALE)
+pub ext fn ImageText(text: *u8, fontSize: i32, color: Color) -> Image // Create an image from text (default font)
+pub ext fn ImageTextEx(font: Font, text: *u8, fontSize: f32, spacing: f32, tint: Color) -> Image // Create an image from text (custom sprite font)
+pub ext fn ImageFormat(image: *Image, newFormat: i32) // Convert image data to desired format
+pub ext fn ImageToPOT(image: *Image, fill: Color) // Convert image to POT (power-of-two)
+pub ext fn ImageCrop(image: *Image, crop: Rectangle) // Crop an image to a defined rectangle
+pub ext fn ImageAlphaCrop(image: *Image, threshold: f32) // Crop image depending on alpha value
+pub ext fn ImageAlphaClear(image: *Image, color: Color, threshold: f32) // Clear alpha channel to desired color
+pub ext fn ImageAlphaMask(image: *Image, alphaMask: Image) // Apply alpha mask to image
+pub ext fn ImageAlphaPremultiply(image: *Image) // Premultiply alpha channel
+pub ext fn ImageBlurGaussian(image: *Image, blurSize: i32) // Apply Gaussian blur using a box blur approximation
+pub ext fn ImageKernelConvolution(image: *Image, kernel: *f32, kernelSize: i32) // Apply custom square convolution kernel to image
+pub ext fn ImageResize(image: *Image, newWidth: i32, newHeight: i32) // Resize image (Bicubic scaling algorithm)
+pub ext fn ImageResizeNN(image: *Image, newWidth: i32, newHeight: i32) // Resize image (Nearest-Neighbor scaling algorithm)
+pub ext fn ImageResizeCanvas(image: *Image, newWidth: i32, newHeight: i32, offsetX: i32, offsetY: i32, fill: Color) // Resize canvas and fill with color
+pub ext fn ImageMipmaps(image: *Image) // Compute all mipmap levels for a provided image
+pub ext fn ImageDither(image: *Image, rBpp: i32, gBpp: i32, bBpp: i32, aBpp: i32) // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
+pub ext fn ImageFlipVertical(image: *Image) // Flip image vertically
+pub ext fn ImageFlipHorizontal(image: *Image) // Flip image horizontally
+pub ext fn ImageRotate(image: *Image, degrees: i32) // Rotate image by input angle in degrees (-359 to 359)
+pub ext fn ImageRotateCW(image: *Image) // Rotate image clockwise 90deg
+pub ext fn ImageRotateCCW(image: *Image) // Rotate image counter-clockwise 90deg
+pub ext fn ImageColorTint(image: *Image, color: Color) // Modify image color: tint
+pub ext fn ImageColorInvert(image: *Image) // Modify image color: invert
+pub ext fn ImageColorGrayscale(image: *Image) // Modify image color: grayscale
+pub ext fn ImageColorContrast(image: *Image, contrast: i32) // Modify image color: contrast (-100 to 100)
+pub ext fn ImageColorBrightness(image: *Image, brightness: i32) // Modify image color: brightness (-255 to 255)
+pub ext fn ImageColorReplace(image: *Image, color: Color, replace: Color) // Modify image color: replace color
+pub ext fn LoadImageColors(image: Image) -> *Color // Load color data from image as a Color array (RGBA - 32bit)
+pub ext fn LoadImagePalette(image: Image, maxPaletteSize: i32, colorCount: *i32) -> *Color // Load colors palette from image as a Color array (RGBA - 32bit)
+pub ext fn UnloadImageColors(colors: *Color) // Unload color data loaded with LoadImageColors()
+pub ext fn UnloadImagePalette(colors: *Color) // Unload colors palette loaded with LoadImagePalette()
+pub ext fn GetImageAlphaBorder(image: Image, threshold: f32) -> Rectangle // Get image alpha border rectangle
+pub ext fn GetImageColor(image: Image, x: i32, y: i32) -> Color // Get image pixel color at (x, y) position
+
+// Image drawing functions
+// NOTE: Image software-rendering functions (CPU)
+pub ext fn ImageClearBackground(dst: *Image, color: Color) // Clear image background with provided color
+pub ext fn ImageDrawPixel(dst: *Image, posX: i32, posY: i32, color: Color) // Draw pixel within an image
+pub ext fn ImageDrawPixelV(dst: *Image, position: Vector2, color: Color) // Draw pixel within an image (Vector version)
+pub ext fn ImageDrawLine(dst: *Image, startPosX: i32, startPosY: i32, endPosX: i32, endPosY: i32, color: Color) // Draw line within an image
+pub ext fn ImageDrawLineV(dst: *Image, start: Vector2, end: Vector2, color: Color) // Draw line within an image (Vector version)
+pub ext fn ImageDrawLineEx(dst: *Image, start: Vector2, end: Vector2, thick: i32, color: Color) // Draw a line defining thickness within an image
+pub ext fn ImageDrawLineStrip(dst: *Image, points: *Vector2, pointCount: i32, color: Color) // Draw a lines sequence within an image
+pub ext fn ImageDrawTriangle(dst: *Image, v1: Vector2, v2: Vector2, v3: Vector2, color: Color) // Draw triangle within an image
+pub ext fn ImageDrawTriangleGradient(dst: *Image, v1: Vector2, v2: Vector2, v3: Vector2, c1: Color, c2: Color, c3: Color) // Draw triangle with interpolated colors within an image
+pub ext fn ImageDrawTriangleLines(dst: *Image, v1: Vector2, v2: Vector2, v3: Vector2, color: Color) // Draw triangle outline within an image
+pub ext fn ImageDrawTriangleFan(dst: *Image, points: *Vector2, pointCount: i32, color: Color) // Draw a triangle fan defined by points within an image (first vertex is the center)
+pub ext fn ImageDrawTriangleStrip(dst: *Image, points: *Vector2, pointCount: i32, color: Color) // Draw a triangle strip defined by points within an image
+pub ext fn ImageDrawRectangle(dst: *Image, posX: i32, posY: i32, width: i32, height: i32, color: Color) // Draw rectangle within an image
+pub ext fn ImageDrawRectangleV(dst: *Image, position: Vector2, size: Vector2, color: Color) // Draw rectangle within an image (Vector version)
+pub ext fn ImageDrawRectangleRec(dst: *Image, rec: Rectangle, color: Color) // Draw rectangle within an image
+pub ext fn ImageDrawRectanglePro(dst: *Image, rec: Rectangle, origin: Vector2, rotation: f32, color: Color) // Draw a color-filled rectangle with pro parameters within and image
+pub ext fn ImageDrawRectangleLines(dst: *Image, posX: i32, posY: i32, width: i32, height: i32, color: Color) // Draw rectangle lines within an image
+pub ext fn ImageDrawRectangleLinesEx(dst: *Image, rec: Rectangle, thick: i32, color: Color) // Draw rectangle lines within an image with line thickness
+pub ext fn ImageDrawRectangleGradientEx(dst: *Image, rec: Rectangle, col1: Color, col2: Color, col3: Color, col4: Color) // Draw rectangle with gradient colors within an image, counter-clockwise color order
+pub ext fn ImageDrawCircle(dst: *Image, centerX: i32, centerY: i32, radius: i32, color: Color) // Draw a filled circle within an image
+pub ext fn ImageDrawCircleV(dst: *Image, center: Vector2, radius: i32, color: Color) // Draw a filled circle within an image (Vector version)
+pub ext fn ImageDrawCircleLines(dst: *Image, centerX: i32, centerY: i32, radius: i32, color: Color) // Draw circle outline within an image
+pub ext fn ImageDrawCircleLinesV(dst: *Image, center: Vector2, radius: i32, color: Color) // Draw circle outline within an image (Vector version)
+pub ext fn ImageDrawCircleGradient(dst: *Image, center: Vector2, radius: f32, inner: Color, outer: Color) // Draw a gradient-filled circle within an image
+
+pub ext fn ImageDrawImage(dst: *Image, src: Image, posX: i32, posY: i32, tint: Color) // Draw an image within an image
+pub ext fn ImageDrawImageEx(dst: *Image, src: Image, position: Vector2, rotation: f32, scale: f32, tint: Color) // Draw an image with scaling and rotation within an image
+pub ext fn ImageDrawImageRec(dst: *Image, src: Image, srcRec: Rectangle, position: Vector2, tint: Color) // Draw a part of an image defined by a rectangle within an image
+pub ext fn ImageDrawImagePro(dst: *Image, src: Image, srcRec: Rectangle, dstRec: Rectangle, origin: Vector2, rotation: f32, tint: Color) // Draw a part of an image defined by a rectangle into destination rectangle, with scaling and rotation, within an image
+pub ext fn ImageDrawText(dst: *Image, text: *u8, posX: i32, posY: i32, fontSize: i32, color: Color) // Draw text (using default font) within an image (destination)
+pub ext fn ImageDrawTextEx(dst: *Image, font: Font, text: *u8, position: Vector2, fontSize: f32, spacing: f32, tint: Color) // Draw text (custom sprite font) within an image (destination)
+pub ext fn ImageDrawTextPro(dst: *Image, font: Font, text: *u8, position: Vector2, origin: Vector2, rotation: f32, fontSize: f32, spacing: f32, tint: Color) // Draw text using Font and pro parameters (rotation)
+
+// Texture loading functions
+// NOTE: These functions require GPU access
+pub ext fn LoadTexture(fileName: *u8) -> Texture2D // Load texture from file into GPU memory (VRAM)
+pub ext fn LoadTextureFromImage(image: Image) -> Texture2D // Load texture from image data
+pub ext fn LoadTextureCubemap(image: Image, layout: CubemapLayout) -> TextureCubemap // Load cubemap from image, multiple image cubemap layouts supported
+pub ext fn LoadRenderTexture(width: i32, height: i32) -> RenderTexture2D // Load texture for rendering (framebuffer)
+pub ext fn IsTextureValid(texture: Texture2D) -> bool // Check if texture is valid (loaded in GPU)
+pub ext fn UnloadTexture(texture: Texture2D) // Unload texture from GPU memory (VRAM)
+pub ext fn IsRenderTextureValid(target: RenderTexture2D) -> bool // Check if render texture is valid (loaded in GPU)
+pub ext fn UnloadRenderTexture(target: RenderTexture2D) // Unload render texture from GPU memory (VRAM)
+pub ext fn UpdateTexture(texture: Texture2D, pixels: anyptr) // Update GPU texture with new data (pixels should be able to fill texture)
+pub ext fn UpdateTextureRec(texture: Texture2D, rec: Rectangle, pixels: anyptr) // Update GPU texture rectangle with new data (pixels and rec should fit in texture)
+
+// Texture configuration functions
+pub ext fn GenTextureMipmaps(texture: *Texture2D) // Generate GPU mipmaps for a texture
+pub ext fn SetTextureFilter(texture: Texture2D, filter: TextureFilter) // Set texture scaling filter mode
+pub ext fn SetTextureWrap(texture: Texture2D, wrap: TextureWrap) // Set texture wrapping mode
+
+// Texture drawing functions
+pub ext fn DrawTexture(texture: Texture2D, posX: i32, posY: i32, tint: Color) // Draw a Texture2D
+pub ext fn DrawTextureV(texture: Texture2D, position: Vector2, tint: Color) // Draw a Texture2D with position defined as Vector2
+pub ext fn DrawTextureEx(texture: Texture2D, position: Vector2, rotation: f32, scale: f32, tint: Color) // Draw a Texture2D with rotation and scale
+pub ext fn DrawTextureRec(texture: Texture2D, rec: Rectangle, position: Vector2, tint: Color) // Draw a part of a texture defined by a rectangle
+pub ext fn DrawTexturePro(texture: Texture2D, srcrec: Rectangle, dstrec: Rectangle, origin: Vector2, rotation: f32, tint: Color) // Draw a part of a texture defined by a source rectangle to destination rectangle, with scaling and rotation
+pub ext fn DrawTextureNPatch(texture: Texture2D, nPatchInfo: NPatchInfo, dstrec: Rectangle, origin: Vector2, rotation: f32, tint: Color) // Draw a texture (or part of it) that stretches or shrinks nicely
+
+// Color/pixel related functions
+pub ext fn ColorIsEqual(col1: Color, col2: Color) -> bool // Check if two colors are equal
+pub ext fn Fade(color: Color, alpha: f32) -> Color // Get color with alpha applied, alpha goes from 0.0f to 1.0f
+pub ext fn ColorToInt(color: Color) -> i32 // Get hexadecimal value for a Color (0xRRGGBBAA)
+pub ext fn ColorNormalize(color: Color) -> Vector4 // Get Color normalized as float [0..1]
+pub ext fn ColorFromNormalized(normalized: Vector4) -> Color // Get Color from normalized values [0..1]
+pub ext fn ColorToHSV(color: Color) -> Vector3 // Get HSV values for a Color, hue [0..360], saturation/value [0..1]
+pub ext fn ColorFromHSV(hue: f32, saturation: f32, value: f32) -> Color // Get a Color from HSV values, hue [0..360], saturation/value [0..1]
+pub ext fn ColorTint(color: Color, tint: Color) -> Color // Get color multiplied with another color
+pub ext fn ColorBrightness(color: Color, factor: f32) -> Color // Get color with brightness correction, brightness factor goes from -1.0f to 1.0f
+pub ext fn ColorContrast(color: Color, contrast: f32) -> Color // Get color with contrast correction, contrast values between -1.0f and 1.0f
+pub ext fn ColorAlpha(color: Color, alpha: f32) -> Color // Get color with alpha applied, alpha goes from 0.0f to 1.0f
+pub ext fn ColorAlphaBlend(dst: Color, src: Color, tint: Color) -> Color // Get src alpha-blended into dst color with tint
+pub ext fn ColorLerp(color1: Color, color2: Color, factor: f32) -> Color // Get color lerp interpolation between two colors, factor [0.0f..1.0f]
+pub ext fn GetColor(hexValue: u32) -> Color // Get Color structure from hexadecimal value
+pub ext fn GetPixelColor(srcPtr: anyptr, format: PixelFormat) -> Color // Get Color from a source pixel pointer of certain format
+pub ext fn SetPixelColor(dstPtr: anyptr, color: Color, format: PixelFormat) // Set color formatted into destination pixel pointer
+pub ext fn GetPixelDataSize(width: i32, height: i32, format: PixelFormat) -> i32 // Get pixel data size in bytes for certain format
+
+//------------------------------------------------------------------------------
+// Font Loading and Text Drawing Functions (Module: text)
+//------------------------------------------------------------------------------
+
+// Font loading/unloading functions
+pub ext fn GetFontDefault() -> Font // Get the default Font
+pub ext fn LoadFont(fileName: *u8) -> Font //  Load font from file into GPU memory (VRAM)
+pub ext fn LoadFontEx(fileName: *u8, fontSize: i32, codepoints: *i32, codepointCount: i32) -> Font // Load font from file with defined codepoints and generation size, use NULL for codepoints and 0 for codepointCount to load the default character set, font size is provided in pixels height
+pub ext fn LoadFontFromImage(image: Image, key: Color, firstChar: i32) -> Font // Load font from Image (XNA style)
+pub ext fn LoadFontFromMemory(fileType: *u8, fileData: *u8, dataSize: i32, fontSize: i32, codepoints: *i32, codepointCount: i32) -> Font // Load font from memory buffer, fileType refers to extension: i.e. '.ttf'
+pub ext fn IsFontValid(font: Font) -> bool // Check if font is valid (font data loaded, WARNING: GPU texture not checked)
+pub ext fn LoadFontData(fileData: *u8, dataSize: i32, fontSize: i32, codepoints: *i32, codepointCount: i32, typ: i32, glyphCount: *i32) -> *GlyphInfo // Load font data for further use
+pub ext fn GenImageFontAtlas(glyphs: *GlyphInfo, glyphRecs: **Rectangle, glyphCount: i32, fontSize: i32, padding: i32, packMethod: i32) -> Image // Generate image font atlas using chars info
+pub ext fn UnloadFontData(glyphs: *GlyphInfo, glyphCount: i32) // Unload font chars info data (RAM)
+pub ext fn UnloadFont(font: Font) // Unload font from GPU memory (VRAM)
+pub ext fn ExportFontAsCode(font: Font, fileName: *u8) -> bool // Export font as code file, returns true on success
+
+// Text drawing functions
+pub ext fn DrawFPS(posX: i32, posY: i32) // Draw current FPS
+pub ext fn DrawText(text: *u8, posX: i32, posY: i32, fontSize: i32, color: Color) // Draw text (using default font)
+pub ext fn DrawTextEx(font: Font, text: *u8, position: Vector2, fontSize: f32, spacing: f32, tint: Color) // Draw text using font and additional parameters
+pub ext fn DrawTextPro(font: Font, text: *u8, position: Vector2, origin: Vector2, rotation: f32, fontSize: f32, spacing: f32, tint: Color) // Draw text using Font and pro parameters (rotation)
+pub ext fn DrawTextCodepoint(font: Font, codepoint: i32, position: Vector2, fontSize: f32, tint: Color) // Draw one character (codepoint)
+pub ext fn DrawTextCodepoints(font: Font, codepoints: *i32, codepointCount: i32, position: Vector2, fontSize: f32, spacing: f32, tint: Color) // Draw multiple characters (codepoint)
+
+// Text font info functions
+pub ext fn SetTextLineSpacing(spacing: i32) // Set vertical line spacing when drawing with line-breaks
+pub ext fn MeasureText(text: *u8, fontSize: i32) -> i32 // Measure string width for default font
+pub ext fn MeasureTextEx(font: Font, text: *u8, fontSize: f32, spacing: f32) -> Vector2 // Measure string size for Font
+pub ext fn MeasureTextCodepoints(font: Font, codepoints: *i32, length: i32, fontSize: f32, spacing: f32) -> Vector2 // Measure string size for an existing array of codepoints for Font
+pub ext fn GetGlyphIndex(font: Font, codepoint: i32) -> i32 // Get glyph index position in font for a codepoint (unicode character), fallback to '?' if not found
+pub ext fn GetGlyphInfo(font: Font, codepoint: i32) -> GlyphInfo // Get glyph font info data for a codepoint (unicode character), fallback to '?' if not found
+pub ext fn GetGlyphAtlasRec(font: Font, codepoint: i32) -> Rectangle // Get glyph rectangle in font atlas for a codepoint (unicode character), fallback to '?' if not found
+
+// Text codepoints management functions (unicode characters)
+pub ext fn LoadUTF8(codepoints: *i32, length: i32) -> *u8 // Load UTF-8 text encoded from codepoints array
+pub ext fn UnloadUTF8(text: *u8) // Unload UTF-8 text encoded from codepoints array
+pub ext fn LoadCodepoints(text: *u8, count: *i32) -> *i32 // Load all codepoints from a UTF-8 text string, codepoints count returned by parameter
+pub ext fn UnloadCodepoints(codepoints: *i32) // Unload codepoints data from memory
+pub ext fn GetCodepointCount(text: *u8) -> i32 // Get total number of codepoints in a UTF-8 encoded string
+pub ext fn GetCodepoint(text: *u8, codepointSize: *i32) -> i32 // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+pub ext fn GetCodepointNext(text: *u8, codepointSize: *i32) -> i32 // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+pub ext fn GetCodepointPrevious(text: *u8, codepointSize: *i32) -> i32 // Get previous codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+pub ext fn CodepointToUTF8(codepoint: i32, utf8Size: *i32) -> *u8 // Encode one codepoint into UTF-8 byte array (array length returned as parameter)
+
+// Text strings management functions (no UTF-8 strings, only byte chars)
+// WARNING 1: Most of these functions use internal static buffers[], it's recommended to store returned data on user-side for re-use
+// WARNING 2: Some functions allocate memory internally for the returned strings, those strings must be freed by user using MemFree()
+pub ext fn LoadTextLines(text: *u8, count: *i32) -> **u8 // Load text as separate lines ('\n')
+pub ext fn UnloadTextLines(text: **u8, lineCount: i32) // Unload text lines
+pub ext fn TextCopy(dst: *u8, src: *u8) -> i32 // Copy one string to another, returns bytes copied
+pub ext fn TextIsEqual(text1: *u8, text2: *u8) -> bool // Check if two text strings are equal
+pub ext fn TextLength(text: *u8) -> u32 // Get text length, checks for '\0' ending
+pub ext fn TextFormat(text: *u8, ...) -> *u8 // Text formatting with variables (sprintf() style)
+pub ext fn TextSubtext(text: *u8, position: i32, length: i32) -> *u8 // Get a piece of a text string
+pub ext fn TextRemoveSpaces(text: *u8) -> *u8 // Remove text spaces, concat words
+pub ext fn GetTextBetween(text: *u8, begin: *u8, end: *u8) -> *u8 // Get text between two strings
+pub ext fn TextReplace(text: *u8, search: *u8, replacement: *u8) -> *u8 // Replace text string with new string
+pub ext fn TextReplaceAlloc(text: *u8, search: *u8, replacement: *u8) -> *u8 // Replace text string with new string, memory must be MemFree()
+pub ext fn TextReplaceBetween(text: *u8, begin: *u8, end: *u8, replacement: *u8) -> *u8 // Replace text between two specific strings
+pub ext fn TextReplaceBetweenAlloc(text: *u8, begin: *u8, end: *u8, replacement: *u8) -> *u8 // Replace text between two specific strings, memory must be MemFree()
+pub ext fn TextInsert(text: *u8, insert: *u8, position: i32) -> *u8 // Insert text in a defined byte position
+pub ext fn TextInsertAlloc(text: *u8, insert: *u8, position: i32) -> *u8 // Insert text in a defined byte position, memory must be MemFree()
+pub ext fn TextJoin(textList: **u8, count: i32, delimiter: *u8) -> *u8 // Join text strings with delimiter
+pub ext fn TextSplit(text: *u8, delimiter: u8, count: *i32) -> **u8 // Split text into multiple strings, using MAX_TEXTSPLIT_COUNT static strings
+pub ext fn TextAppend(text: *u8, append: *u8, position: *i32) // Append text at specific position and move cursor
+pub ext fn TextFindIndex(text: *u8, search: *u8) -> i32 // Find first text occurrence within a string, -1 if not found
+pub ext fn TextToUpper(text: *u8) -> *u8 // Get upper case version of provided string
+pub ext fn TextToLower(text: *u8) -> *u8 // Get lower case version of provided string
+pub ext fn TextToPascal(text: *u8) -> *u8 // Get Pascal case notation version of provided string
+pub ext fn TextToSnake(text: *u8) -> *u8 // Get Snake case notation version of provided string
+pub ext fn TextToCamel(text: *u8) -> *u8 // Get Camel case notation version of provided string
+pub ext fn TextToInteger(text: *u8) -> i32 // Get integer value from text
+pub ext fn TextToFloat(text: *u8) -> f32 // Get float value from text
+
+//------------------------------------------------------------------------------
+// Basic 3d Shapes Drawing Functions (Module: models)
+//------------------------------------------------------------------------------
+
+// Basic geometric 3D shapes drawing functions
+pub ext fn DrawLine3D(startPos: Vector3, endPos: Vector3, color: Color) // Draw a line in 3D world space
+pub ext fn DrawPoint3D(position: Vector3, color: Color) // Draw a point in 3D space, actually a small line
+pub ext fn DrawCircle3D(center: Vector3, radius: f32, rotationAxis: Vector3, rotationAngle: f32, color: Color) // Draw a circle in 3D world space
+pub ext fn DrawTriangle3D(v1: Vector3, v2: Vector3, v3: Vector3, color: Color) // Draw a color-filled triangle, counter-clockwise vertex order
+pub ext fn DrawTriangleStrip3D(points: *Vector3, pointCount: i32, color: Color) // Draw a triangle strip defined by points
+pub ext fn DrawCube(position: Vector3, width: f32, height: f32, length: f32, color: Color) // Draw cube
+pub ext fn DrawCubeV(position: Vector3, size: Vector3, color: Color) // Draw cube (Vector version)
+pub ext fn DrawCubeWires(position: Vector3, width: f32, height: f32, length: f32, color: Color) // Draw cube wires
+pub ext fn DrawCubeWiresV(position: Vector3, size: Vector3, color: Color) // Draw cube wires (Vector version)
+pub ext fn DrawSphere(centerPos: Vector3, radius: f32, color: Color) // Draw sphere
+pub ext fn DrawSphereEx(centerPos: Vector3, radius: f32, rings: i32, slices: i32, color: Color) // Draw sphere with defined rings and slices
+pub ext fn DrawSphereWires(centerPos: Vector3, radius: f32, rings: i32, slices: i32, color: Color) // Draw sphere wires
+pub ext fn DrawCylinder(position: Vector3, radiusTop: f32, radiusBottom: f32, height: f32, sides: i32, color: Color) // Draw a cylinder/cone
+pub ext fn DrawCylinderEx(startPos: Vector3, endPos: Vector3, startRadius: f32, endRadius: f32, sides: i32, color: Color) // Draw a cylinder with base at startPos and top at endPos
+pub ext fn DrawCylinderWires(position: Vector3, radiusTop: f32, radiusBottom: f32, height: f32, sides: i32, color: Color) // Draw a cylinder/cone wires
+pub ext fn DrawCylinderWiresEx(startPos: Vector3, endPos: Vector3, startRadius: f32, endRadius: f32, sides: i32, color: Color) // Draw a cylinder wires with base at startPos and top at endPos
+pub ext fn DrawCapsule(startPos: Vector3, endPos: Vector3, radius: f32, rings: i32, slices: i32, color: Color) // Draw a capsule with the center of its sphere caps at startPos and endPos
+pub ext fn DrawCapsuleWires(startPos: Vector3, endPos: Vector3, radius: f32, rings: i32, slices: i32, color: Color) // Draw capsule wireframe with the center of its sphere caps at startPos and endPos
+pub ext fn DrawPlane(centerPos: Vector3, size: Vector2, color: Color) // Draw a plane XZ
+pub ext fn DrawRay(ray: Ray, color: Color) // Draw a ray line
+pub ext fn DrawGrid(slices: i32, spacing: f32) // Draw a grid (centered at (0, 0, 0))
+
+//------------------------------------------------------------------------------
+// Model 3d Loading and Drawing Functions (Module: models)
+//------------------------------------------------------------------------------
+
+// Model management functions
+pub ext fn LoadModel(fileName: *u8) -> Model // Load model from files (meshes and materials)
+pub ext fn LoadModelFromMesh(mesh: Mesh) -> Model // Load model from generated mesh (default material)
+pub ext fn IsModelValid(model: Model) -> bool // Check if model is valid (loaded in GPU, VAO/VBOs)
+pub ext fn UnloadModel(model: Model) // Unload model (including meshes) from memory (RAM and/or VRAM)
+pub ext fn GetModelBoundingBox(model: Model) -> BoundingBox // Compute model bounding box limits (considers all meshes)
+
+// Model drawing functions
+pub ext fn DrawModel(model: Model, position: Vector3, scale: f32, tint: Color) // Draw a model (with texture if set)
+pub ext fn DrawModelEx(model: Model, position: Vector3, rotationAxis: Vector3, rotationAngle: f32, scale: Vector3, tint: Color) // Draw a model with custom transform
+pub ext fn DrawModelWires(model: Model, position: Vector3, scale: f32, tint: Color) // Draw a model wires (with texture if set)
+pub ext fn DrawModelWiresEx(model: Model, position: Vector3, rotationAxis: Vector3, rotationAngle: f32, scale: Vector3, tint: Color) // Draw a model wires with custom transform
+pub ext fn DrawBoundingBox(box: BoundingBox, color: Color) // Draw bounding box (wires)
+pub ext fn DrawBillboard(camera: Camera, texture: Texture2D, position: Vector3, scale: f32, tint: Color) // Draw a billboard texture
+pub ext fn DrawBillboardRec(camera: Camera, texture: Texture2D, rec: Rectangle, position: Vector3, size: Vector2, tint: Color) // Draw a billboard texture defined by rectangle
+pub ext fn DrawBillboardPro(camera: Camera, texture: Texture2D, rec: Rectangle, position: Vector3, up: Vector3, size: Vector2, origin: Vector2, rotation: f32, tint: Color) // Draw a billboard texture defined by source rectangle with scaling and rotation
+
+// Mesh management functions
+pub ext fn UploadMesh(mesh: *Mesh, dynamic: bool) // Upload mesh vertex data in GPU and provide VAO/VBO ids
+pub ext fn UpdateMeshBuffer(mesh: Mesh, index: i32, data: anyptr, dataSize: i32, offset: i32) // Update mesh vertex data in GPU for a specific buffer index
+pub ext fn UnloadMesh(mesh: Mesh) // Unload mesh data from CPU and GPU
+pub ext fn DrawMesh(mesh: Mesh, material: Material, transform: Matrix) // Draw a 3d mesh with material and transform
+pub ext fn DrawMeshInstanced(mesh: Mesh, material: Material, transforms: *Matrix, instances: i32) // Draw multiple mesh instances with material and different transforms
+pub ext fn GetMeshBoundingBox(mesh: Mesh) -> BoundingBox // Compute mesh bounding box limits
+pub ext fn GenMeshTangents(mesh: *Mesh) // Compute mesh tangents
+pub ext fn ExportMesh(mesh: Mesh, fileName: *u8) -> bool // Export mesh data to file, returns true on success
+pub ext fn ExportMeshAsCode(mesh: Mesh, fileName: *u8) -> bool // Export mesh as code file (.h) defining multiple arrays of vertex attributes
+
+// Mesh generation functions
+pub ext fn GenMeshPoly(sides: i32, radius: f32) -> Mesh // Generate polygonal mesh
+pub ext fn GenMeshPlane(width: f32, height: f32, resX: i32, resY: i32) -> Mesh // Generate plane mesh (with subdivisions)
+pub ext fn GenMeshCube(width: f32, height: f32, length: f32) -> Mesh // Generate cuboid mesh
+pub ext fn GenMeshSphere(radius: f32, rings: i32, slices: i32) -> Mesh // Generate sphere mesh (standard sphere)
+pub ext fn GenMeshHemiSphere(radius: f32, rings: i32, slices: i32) -> Mesh // Generate half-sphere mesh (no bottom cap)
+pub ext fn GenMeshCylinder(radius: f32, height: f32, slices: i32) -> Mesh // Generate cylinder mesh
+pub ext fn GenMeshCone(radius: f32, height: f32, slices: i32) -> Mesh // Generate cone/pyramid mesh
+pub ext fn GenMeshTorus(radius: f32, size: f32, radSeg: i32, sides: i32) -> Mesh // Generate torus mesh
+pub ext fn GenMeshKnot(radius: f32, size: f32, radSeg: i32, sides: i32) -> Mesh // Generate trefoil knot mesh
+pub ext fn GenMeshHeightmap(heightmap: Image, size: Vector3) -> Mesh // Generate heightmap mesh from image data
+pub ext fn GenMeshCubicmap(cubicmap: Image, cubeSize: Vector3) -> Mesh // Generate cubes-based map mesh from image data
+
+// Material loading/unloading functions
+pub ext fn LoadMaterials(fileName: *u8, materialCount: *i32) -> *Material // Load materials from model file
+pub ext fn LoadMaterialDefault() -> Material // Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
+pub ext fn IsMaterialValid(material: Material) -> bool // Check if material is valid (shader assigned, map textures loaded in GPU)
+pub ext fn UnloadMaterial(material: Material) // Unload material from GPU memory (VRAM)
+pub ext fn SetMaterialTexture(material: *Material, mapType: MaterialMapIndex, texture: Texture2D) // Set texture for a material map type (MATERIAL_MAP_DIFFUSE, MATERIAL_MAP_SPECULAR...)
+pub ext fn SetModelMeshMaterial(model: *Model, meshId: i32, materialId: i32) // Set material for a mesh
+
+// Model animations loading/unloading functions
+pub ext fn LoadModelAnimations(fileName: *u8, animCount: *i32) -> *ModelAnimation // Load model animations from file
+pub ext fn UpdateModelAnimation(model: Model, anim: ModelAnimation, frame: f32) // Update model animation pose (vertex buffers and bone matrices)
+pub ext fn UpdateModelAnimationEx(model: Model, animA: ModelAnimation, frameA: f32, animB: ModelAnimation, frameB: f32, blend: f32) // Update model animation pose, blending two animations
+pub ext fn UnloadModelAnimations(animations: *ModelAnimation, animCount: i32) // Unload animation array data
+pub ext fn IsModelAnimationValid(model: Model, anim: ModelAnimation) -> bool // Check model animation skeleton match
+
+// Collision detection functions
+pub ext fn CheckCollisionSpheres(center1: Vector3, radius1: f32, center2: Vector3, radius2: f32) -> bool // Check collision between two spheres
+pub ext fn CheckCollisionBoxes(box1: BoundingBox, box2: BoundingBox) -> bool // Check collision between two bounding boxes
+pub ext fn CheckCollisionBoxSphere(box: BoundingBox, center: Vector3, radius: f32) -> bool // Check collision between box and sphere
+pub ext fn GetRayCollisionSphere(ray: Ray, center: Vector3, radius: f32) -> RayCollision // Get collision info between ray and sphere
+pub ext fn GetRayCollisionBox(ray: Ray, box: BoundingBox) -> RayCollision // Get collision info between ray and box
+pub ext fn GetRayCollisionMesh(ray: Ray, mesh: Mesh, transform: Matrix) -> RayCollision // Get collision info between ray and mesh
+pub ext fn GetRayCollisionTriangle(ray: Ray, p1: Vector3, p2: Vector3, p3: Vector3) -> RayCollision // Get collision info between ray and triangle
+pub ext fn GetRayCollisionQuad(ray: Ray, p1: Vector3, p2: Vector3, p3: Vector3, p4: Vector3) -> RayCollision // Get collision info between ray and quad
+
+//------------------------------------------------------------------------------
+// Audio Loading and Playing Functions (Module: audio)
+//------------------------------------------------------------------------------
+pub type AudioCallback = fn(bufferData: anyptr, frames: u32)
+
+// Audio device management functions
+pub ext fn InitAudioDevice() // Initialize audio device and context
+pub ext fn CloseAudioDevice() // Close the audio device and context
+pub ext fn IsAudioDeviceReady() -> bool // Check if audio device has been initialized successfully
+pub ext fn SetMasterVolume(volume: f32) // Set master volume (listener)
+pub ext fn GetMasterVolume() -> f32 // Get master volume (listener)
+
+// Wave/Sound loading/unloading functions
+pub ext fn LoadWave(fileName: *u8) -> Wave // Load wave data from file
+pub ext fn LoadWaveFromMemory(fileType: *u8, fileData: *u8, dataSize: i32) -> Wave // Load wave from memory buffer, fileType refers to extension: i.e. '.wav'
+pub ext fn IsWaveValid(wave: Wave) -> bool // Check if wave data is valid (data loaded and parameters)
+pub ext fn LoadSound(fileName: *u8) -> Sound // Load sound from file
+pub ext fn LoadSoundFromWave(wave: Wave) -> Sound // Load sound from wave data
+pub ext fn LoadSoundAlias(source: Sound) -> Sound // Load sound alias, new sound that shares the same sample data as the source sound, does not own the sound data
+pub ext fn IsSoundValid(sound: Sound) -> bool // Check if sound is valid (data loaded and buffers initialized)
+pub ext fn UpdateSound(sound: Sound, data: anyptr, frameCount: i32) // Update sound buffer with new data (default data format: 32 bit float, stereo)
+pub ext fn UnloadWave(wave: Wave) // Unload wave data
+pub ext fn UnloadSound(sound: Sound) // Unload sound
+pub ext fn UnloadSoundAlias(alias: Sound) // Unload sound alias (does not deallocate sample data)
+pub ext fn ExportWave(wave: Wave, fileName: *u8) -> bool // Export wave data to file, returns true on success
+pub ext fn ExportWaveAsCode(wave: Wave, fileName: *u8) -> bool // Export wave sample data to code (.h), returns true on success
+
+// Wave/Sound management functions
+pub ext fn PlaySound(sound: Sound) // Play a sound
+pub ext fn StopSound(sound: Sound) // Stop playing a sound
+pub ext fn PauseSound(sound: Sound) // Pause a sound
+pub ext fn ResumeSound(sound: Sound) // Resume a paused sound
+pub ext fn IsSoundPlaying(sound: Sound) -> bool // Check if sound is currently playing
+pub ext fn SetSoundVolume(sound: Sound, volume: f32) // Set volume for a sound (1.0 is max level)
+pub ext fn SetSoundPitch(sound: Sound, pitch: f32) // Set pitch for a sound (1.0 is base level)
+pub ext fn SetSoundPan(sound: Sound, pan: f32) // Set pan for a sound (-1.0 left, 0.0 center, 1.0 right)
+pub ext fn WaveCopy(wave: Wave) -> Wave // Copy a wave to a new wave
+pub ext fn WaveCrop(wave: *Wave, initFrame: i32, finalFrame: i32) // Crop a wave to defined frames range
+pub ext fn WaveFormat(wave: *Wave, sampleRate: i32, sampleSize: i32, channels: i32) // Convert wave data to desired format
+pub ext fn LoadWaveSamples(wave: Wave) -> *f32 // Load samples data from wave as a 32bit float data array
+pub ext fn UnloadWaveSamples(samples: *f32) // Unload samples data loaded with LoadWaveSamples()
+
+// Music management functions
+pub ext fn LoadMusicStream(fileName: *u8) -> Music // Load music stream from file
+pub ext fn LoadMusicStreamFromMemory(fileType: *u8, data: *u8, dataSize: i32) -> Music // Load music stream from data
+pub ext fn IsMusicValid(music: Music) -> bool // Check if music stream is valid (context and buffers initialized)
+pub ext fn UnloadMusicStream(music: Music) // Unload music stream
+pub ext fn PlayMusicStream(music: Music) // Start music playing
+pub ext fn IsMusicStreamPlaying(music: Music) -> bool // Check if music is playing
+pub ext fn UpdateMusicStream(music: Music) // Update buffers for music streaming
+pub ext fn StopMusicStream(music: Music) // Stop music playing
+pub ext fn PauseMusicStream(music: Music) // Pause music playing
+pub ext fn ResumeMusicStream(music: Music) // Resume playing paused music
+pub ext fn SeekMusicStream(music: Music, position: f32) // Seek music to a position (in seconds)
+pub ext fn SetMusicVolume(music: Music, volume: f32) // Set volume for music (1.0 is max level)
+pub ext fn SetMusicPitch(music: Music, pitch: f32) // Set pitch for music (1.0 is base level)
+pub ext fn SetMusicPan(music: Music, pan: f32) // Set pan for music (-1.0 left, 0.0 center, 1.0 right)
+pub ext fn GetMusicTimeLength(music: Music) -> f32 // Get music time length (in seconds)
+pub ext fn GetMusicTimePlayed(music: Music) -> f32 // Get current music time played (in seconds)
+
+// AudioStream management functions
+pub ext fn LoadAudioStream(sampleRate: u32, sampleSize: u32, channels: u32) -> AudioStream // Load audio stream (to stream raw audio pcm data)
+pub ext fn IsAudioStreamValid(stream: AudioStream) -> bool // Check if an audio stream is valid (buffers initialized)
+pub ext fn UnloadAudioStream(stream: AudioStream) // Unload audio stream and free memory
+pub ext fn UpdateAudioStream(stream: AudioStream, data: anyptr, frameCount: i32) // Update audio stream buffers with data
+pub ext fn IsAudioStreamProcessed(stream: AudioStream) -> bool // Check if any audio stream buffers requires refill
+pub ext fn PlayAudioStream(stream: AudioStream) // Play audio stream
+pub ext fn PauseAudioStream(stream: AudioStream) // Pause audio stream
+pub ext fn ResumeAudioStream(stream: AudioStream) // Resume audio stream
+pub ext fn IsAudioStreamPlaying(stream: AudioStream) -> bool // Check if audio stream is playing
+pub ext fn StopAudioStream(stream: AudioStream) // Stop audio stream
+pub ext fn SetAudioStreamVolume(stream: AudioStream, volume: f32) // Set volume for audio stream (1.0 is max level)
+pub ext fn SetAudioStreamPitch(stream: AudioStream, pitch: f32) // Set pitch for audio stream (1.0 is base level)
+pub ext fn SetAudioStreamPan(stream: AudioStream, pan: f32) // Set pan for audio stream (-1.0 left, 0.0 center, 1.0 right)
+pub ext fn SetAudioStreamBufferSizeDefault(size: i32) // Default size for new audio streams
+pub ext fn SetAudioStreamCallback(stream: AudioStream, callback: AudioCallback) // Audio thread callback to request new data
+
+pub ext fn AttachAudioStreamProcessor(stream: AudioStream, processor: AudioCallback) // Attach audio stream processor to stream, receives frames x 2 samples as 'float' (stereo)
+pub ext fn DetachAudioStreamProcessor(stream: AudioStream, processor: AudioCallback) // Detach audio stream processor from stream
+
+pub ext fn AttachAudioMixedProcessor(processor: AudioCallback) // Attach audio stream processor to the entire audio pipeline, receives frames x 2 samples as 'float' (stereo)
+pub ext fn DetachAudioMixedProcessor(processor: AudioCallback) // Detach audio stream processor from the entire audio pipeline

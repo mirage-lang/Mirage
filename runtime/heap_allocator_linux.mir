@@ -1,0 +1,25 @@
+const libc := import("libc")
+
+impl Allocator for HeapAllocator {
+    fn alloc(self, size: usize, zero_memory: bool) -> (anyptr, Allocator_Error) {
+        const ptr := libc.calloc(size) when zero_memory else libc.malloc(size)
+        if ptr == nil {
+            return_err .Out_Of_Memory
+        }
+
+        return_ok ptr
+    }
+
+    fn realloc(self, ptr: anyptr, size: usize) -> (anyptr, Allocator_Error) {
+        const new_ptr := libc.realloc(ptr, size)
+        if new_ptr == nil {
+            return_err .Out_Of_Memory
+        }
+        
+        return_ok new_ptr
+    }
+
+    fn free(self, ptr: anyptr) {
+        libc.free(ptr)
+    }
+}

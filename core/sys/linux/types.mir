@@ -1,0 +1,2 @@
+// Represents a file descriptor
+pub type Fd = i32

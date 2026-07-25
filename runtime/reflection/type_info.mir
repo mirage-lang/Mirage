@@ -1,0 +1,144 @@
+pub type Type_Info = union(enum) {
+    Pointer: struct {
+        base_type: *Type_Info
+    }
+
+    Slice: struct {
+        base_type: *Type_Info
+    }
+
+    Array: struct {
+        base_type: *Type_Info
+        length: usize
+    }
+
+    Named: struct {
+        name: []u8
+        base_type: *Type_Info
+    }
+
+    Struct: struct {
+        name: []u8
+        fields: []Type_Info_Field
+        size: usize
+        align: usize
+        packed: bool
+        is_generic: bool
+        generic_args: []Type_Info_Generic_Arg
+    }
+
+    Enum: struct {
+        name: []u8
+        variants: []Type_Info_Enum_Variant
+        storage_kind: Type_Kind
+        size: usize
+        is_generic: bool
+        generic_args: []Type_Info_Generic_Arg
+    }
+
+    Union: struct {
+        name: []u8
+        members: []Type_Info_Field
+        size: usize
+        align: usize
+        is_generic: bool
+        generic_args: []Type_Info_Generic_Arg
+    }
+
+    Tagged_Union: struct {
+        name: []u8
+        variants: []Type_Info_Tagged_Variant
+        size: usize
+        align: usize
+        is_generic: bool
+        generic_args: []Type_Info_Generic_Arg
+    }
+
+    Bitset: struct {
+        name: []u8
+        member_type: *Type_Info
+        storage_kind: Type_Kind
+        size: usize
+        is_generic: bool
+        generic_args: []Type_Info_Generic_Arg
+    }
+
+    Function: struct {
+        params: []Type_Info_Param
+        return_types: []*Type_Info
+        is_variadic: bool
+    }
+
+    Trait: struct {
+        name: []u8
+        methods: []Type_Info_Method
+    }
+
+    Error_Type: struct {
+        members: []*Type_Info
+    }
+}
+
+pub type Type_Kind = enum(u32) {
+    U8           = 1
+    U16          = 2
+    U32          = 3
+    U64          = 4
+    I8           = 5
+    I16          = 6
+    I32          = 7
+    I64          = 8
+    F32          = 9
+    F64          = 10
+    USize        = 11
+    Bool         = 12
+    Byte         = 13
+    Anyptr       = 14
+    Error        = 15
+    Pointer      = 16
+    Slice        = 17
+    Array        = 18
+    Named        = 19
+    Struct       = 20
+    Enum         = 21
+    Union        = 22
+    Tagged_Union = 23
+    Bitset       = 24
+    Function     = 25
+    Trait        = 26
+    Error_Type   = 27
+}
+
+pub type Type_Info_Field = struct {
+    name: []u8
+    type_info: *Type_Info
+    offset: usize
+}
+
+pub type Type_Info_Enum_Variant = struct {
+    name: []u8
+    value: i64
+}
+
+pub type Type_Info_Tagged_Variant = struct {
+    name: []u8
+    tag_value: u32
+    payload: *Type_Info
+}
+
+pub type Type_Info_Param = struct {
+    name: []u8
+    type_info: *Type_Info
+}
+
+pub type Type_Info_Method = struct {
+    name: []u8
+    type_info: *Type_Info
+}
+
+pub type Type_Info_Generic_Arg = struct {
+    is_type: bool
+    type_arg: *Type_Info
+    value_arg: i64
+    value_arg_type: *Type_Info
+}

@@ -1,0 +1,20 @@
+type Nil_Allocator = struct {}
+
+impl Allocator for Nil_Allocator {
+    fn alloc(self, size: usize, zero_memory: bool) -> (anyptr, Allocator_Error) {
+        return_ok nil
+    }
+
+    fn realloc(self, ptr: anyptr, size: usize) -> (anyptr, Allocator_Error) {
+        return_ok nil
+    }
+
+    fn free(self, ptr: anyptr) {
+    }
+}
+
+const nil_allocator_handle: Nil_Allocator = {}
+
+pub fn nil_allocator() -> Allocator {
+    return &nil_allocator_handle
+}

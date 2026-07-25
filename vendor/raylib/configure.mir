@@ -1,0 +1,39 @@
+const target_os   := import("build/options").target_os
+const target_arch := import("build/options").target_arch
+const shared_lib  := $option("vendor/raylib/shared_lib", false)
+
+// Windows
+when target_os == .Windows {
+    #link(flag, "/NODEFAULTLIB:msvcrt" when shared_lib else "/NODEFAULTLIB:libcmt")
+    
+    #link(lib, "libs/windows/raylibdll.lib" when shared_lib else "libs/windows/raylib.lib")
+
+    #link(system, "Winmm.lib")
+    #link(system, "Gdi32.lib")
+    #link(system, "User32.lib")
+    #link(system, "Shell32.lib")
+}
+
+// Linux
+when target_os == .Linux {
+    #link(system, "m")
+    #link(system, "X11")
+
+    when target_arch == .X86_64 {
+        #link(lib, "libs/linux/libraylib.so.600" when shared_lib else "libs/linux/libraylib.a")
+    } else {
+        #link(system, "raylib")
+    }
+}
+
+// WebAssembly
+when target_arch == .Wasm32 || target_arch == .Wasm64p32 {
+    #link(lib, "libs/wasm/libraylib.web.a")
+}
+
+// Windows has 32-bit long even on x64...
+when target_os == .Windows {
+    pub type long = i32
+} else {
+    pub type long = i64
+}

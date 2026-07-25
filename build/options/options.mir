@@ -1,0 +1,17 @@
+pub type OperatingSystem = enum {
+    Linux
+    Windows
+    Other
+}
+
+pub type Architecture = enum {
+    X86
+    X86_64
+    Arm64
+    Wasm32
+    Wasm64p32
+    Other
+}
+
+pub const target_os:   OperatingSystem = $option("build/target_os",   .Linux)
+pub const target_arch: Architecture    = $option("build/target_arch", .X86_64)

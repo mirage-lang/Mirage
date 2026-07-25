@@ -1,0 +1,7 @@
+type HeapAllocator = struct {}
+
+const heap_allocator_handle: HeapAllocator = {}
+
+pub fn heap_allocator() -> Allocator {
+    return &heap_allocator_handle
+}

@@ -1,0 +1,15 @@
+pub type Allocator_Error_Kind = enum {
+    Out_Of_Memory
+}
+
+pub type Allocator_Error = error(Allocator_Error_Kind)
+
+pub type Allocator = trait {
+    fn alloc(self, size: usize, zero_memory := true) -> (anyptr, Allocator_Error)
+    fn realloc(self, ptr: anyptr, size: usize) -> (anyptr, Allocator_Error)
+    fn free(self, ptr: anyptr)
+}
+
+pub type Destructable = trait {
+    fn destroy(self)
+}

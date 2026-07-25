@@ -1,0 +1,155 @@
+const linux := import("core/sys/linux")
+
+pub type Linux_File = struct {
+    allocator: Allocator
+    fd: linux.Fd
+}
+
+mut linux_std_files: [3]Linux_File
+
+fn _init_std_stream(file: *File, fd: linux.Fd) {
+    linux_std_files[fd] = {
+        .allocator = nil_allocator(),
+        .fd = fd,
+    }
+
+    file.* = &linux_std_files[fd]
+}
+
+@init
+fn _init_std_streams() {
+    _init_std_stream(&stdin,  0)
+    _init_std_stream(&stdout, 1)
+    _init_std_stream(&stderr, 2)
+}
+
+@always_inline
+fn _new_file(fd: linux.Fd) -> (*Linux_File, File_Error) {
+    const allocator := heap_allocator()
+    const file: *Linux_File = try allocator.alloc(size_of(Linux_File))
+
+    file.* = {
+        .allocator = heap_allocator(),
+        .fd = fd,
+    }
+
+    return_ok file
+}
+
+@always_inline
+fn _map_errno_to_io_error(errno: i64) -> IO_Error {
+    return match errno {
+        linux.EINVAL: .Invalid_Argument,
+        linux.ENOENT: .Not_Exist,
+        linux.EACCES: .Permission_Denied,
+        linux.EPERM:  .Permission_Denied,
+        linux.EAGAIN: .Would_Block,
+        linux.EBADF:  .Closed,
+        linux.EINTR:  .Interrupted,
+
+        _: .Unknown
+    }
+}
+
+fn _open(name: []u8, flags: File_Flags) -> (*Linux_File, File_Error) {
+    if len(name) == 0 {
+        return_err .Invalid_Path
+    }
+
+    mut o_flags: i32 = 0
+    if .Write in flags {
+        o_flags = linux.O_RDWR when .Read in flags else linux.O_WRONLY
+    } else {
+        o_flags = linux.O_RDONLY
+    }
+
+    if .Create       in flags { o_flags |= linux.O_CREAT    }
+    if .Truncate     in flags { o_flags |= linux.O_TRUNC    }
+    if .Append       in flags { o_flags |= linux.O_APPEND   }
+    if .Sync         in flags { o_flags |= linux.O_DSYNC    }
+    if .Non_Blocking in flags { o_flags |= linux.O_NONBLOCK }
+    if .Exclusive    in flags { o_flags |= linux.O_EXCL     }
+
+    const result := linux.open(name, o_flags, 0)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    const fd := cast(result, linux.Fd)
+    const file, err := _new_file(fd)
+    defer if err { 
+        linux.close(fd) 
+    }
+
+    if err {
+        return_err err
+    }
+
+    return_ok file
+}
+
+impl File for Linux_File {
+    fn read(self, dst: []u8) -> (usize, IO_Error) {
+        const result := linux.read(self.fd, dst, len(dst))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        if result == 0 {
+            return_err .Eof
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn write(self, src: []byte) -> (usize, IO_Error) {
+        const result := linux.write(self.fd, src, len(src))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn seek(self, offset: i64, whence: Seek_From) -> (i64, IO_Error) {
+        const result := linux.lseek(self.fd, offset, cast(whence, i32))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok result
+    }
+
+    fn current(self) -> (i64, IO_Error) {
+        return self.seek(0, .Current)
+    }
+
+    fn size(self) -> (usize, IO_Error) {
+        const curr := try self.seek(0, .Current)
+        const end := try self.seek(0, .End)
+
+        try self.seek(cast(curr, i64), .Start)
+
+        return_ok cast(end, usize)
+    }
+
+    fn close(self) -> IO_Error {
+        const result := linux.close(self.fd)
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok
+    }
+
+    fn destroy(self) {
+        if self.fd == -1 {
+            return
+        }
+
+        linux.close(self.fd)
+
+        self.fd = -1
+        self.allocator.free(self)
+    }
+}

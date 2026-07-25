@@ -1,0 +1,11 @@
+// Allocate n bytes of memory
+pub ext fn malloc(n: usize) -> anyptr
+
+// Allocate n bytes of memory and zeroes out the block
+pub ext fn calloc(n: usize) -> anyptr
+
+// Re-allocate the allocated block identified by ptr and make it n bytes in size
+pub ext fn realloc(ptr: anyptr, n: usize) -> anyptr
+
+// Free a block allocated by malloc or realloc
+pub ext fn free(ptr: anyptr)

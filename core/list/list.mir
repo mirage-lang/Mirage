@@ -1,0 +1,225 @@
+import("runtime")
+
+const mem  := import("core/mem")
+const algo := import("core/algorithms")
+
+const DEFAULT_CAPACITY: usize = 4
+const GROWTH_FACTOR: usize = 2
+
+pub type List_Error = error(List_Error_Kind)
+pub type List_Error_Kind = enum {
+    Out_Of_Range
+}
+
+pub type List[T: type] = struct {
+    allocator: Allocator
+    data: *T
+    length: usize
+    capacity: usize
+}
+
+pub fn make_list[T: type](allocator := heap_allocator()) -> List {
+    return {
+        .allocator = allocator,
+        .data = nil,
+        .length = 0,
+        .capacity = 0,
+    }
+}
+
+pub fn make_list_with_capacity[T: type](initial_capacity: usize, allocator := heap_allocator()) -> (List, Allocator_Error) {
+    mut list := make_list[T](allocator)
+
+    if initial_capacity > 0 {
+        try list.reserve(initial_capacity)
+    }
+
+    return_ok list
+}
+
+impl List[T: type] {
+    pub fn reserve(self, min_capacity: usize) -> Allocator_Error {
+        if min_capacity <= self.capacity {
+            return_ok
+        }
+
+        const new_data_len := min_capacity * size_of(T)
+        const new_data := try self.allocator.realloc(self.data, new_data_len)
+
+        self.data = new_data
+        self.capacity = min_capacity
+
+        return_ok
+    }
+
+    @always_inline
+    fn ensure_capacity(self) -> Allocator_Error {
+        if self.length == self.capacity {
+            const new_capacity := self.capacity == 0 ? DEFAULT_CAPACITY : self.capacity * GROWTH_FACTOR
+
+            try self.reserve(new_capacity)
+        }
+        
+        return_ok
+    }
+
+    pub fn push(self, elem: T) -> Allocator_Error {
+        try self.ensure_capacity()
+
+        mem.copy(&self.data[self.length], &elem, size_of(T))
+
+        self.length++
+
+        return_ok
+    }
+
+    pub fn pop(self, elem_out: *T = nil) -> bool {
+        if self.length == 0 {
+            return false
+        }
+
+        self.length--
+
+        if elem_out != nil {
+            mem.copy(elem_out, &self.data[self.length], size_of(T))
+        }
+
+        return true
+    }
+
+    pub fn insert(self, mut index: usize, elem: T) -> Allocator_Error {
+        try self.ensure_capacity()
+
+        if index > self.length { index = self.length }
+
+        if index < self.length {
+            const bytes_to_move := (self.length - index) * size_of(T)
+
+            mem.move(&self.data[index + 1], &self.data[index], bytes_to_move)
+        }
+        
+        mem.copy(&self.data[index], &elem, size_of(T))
+
+        self.length++
+
+        return_ok
+    }
+
+    pub fn remove_at(self, index: usize, elem_out: *T) {
+        if index >= self.length {
+            return
+        }
+
+        if elem_out != nil {
+            mem.copy(elem_out, &self.data[index], size_of(T))
+        }
+
+        if self.length == 1 {
+            self.length = 0
+            return
+        }
+
+        if index + 1 < self.length { 
+            const bytes_to_move := (self.length - index - 1) * size_of(T)
+
+            mem.move(&self.data[index], &self.data[index + 1], bytes_to_move)
+        }
+
+        self.length--
+    }
+
+    pub fn remove_swap(self, index: usize, elem_out: *T) {
+        if index >= self.length {
+            return
+        }
+
+        if elem_out != nil {
+            mem.copy(elem_out, &self.data[index], size_of(T))
+        }
+
+        if self.length == 1 {
+            self.length = 0
+            return
+        }
+
+        const last := self.length - 1
+        if index != last {
+            mem.copy(&self.data[index], &self.data[last], size_of(T))
+        }
+
+        self.length--
+    }
+
+    @always_inline
+    pub fn clear(self) {
+        self.length = 0
+    }
+
+    pub fn destroy(self) {
+        if self.data != nil {
+            self.allocator.free(self.data)
+            self.data = nil
+            self.length = 0
+            self.capacity = 0
+        }
+    }
+
+    pub fn get(self, index: usize) -> (elem: T, List_Error) {
+        if index >= self.length {
+            return_err .Out_Of_Range
+        }
+
+        return_ok self.data[index]
+    }
+
+    pub fn set(self, index: usize, elem: T) -> List_Error {
+        if index >= self.length {
+            return_err .Out_Of_Range
+        }
+
+        mem.copy(&self.data[index], &elem, size_of(T))
+        return_ok
+    }
+
+    pub fn try_get(self, index: usize) -> (*T, bool) {
+        if index >= self.length {
+            return nil, false
+        }
+
+        return &self.data[index], true
+    }
+
+    pub fn try_set(self, index: usize, elem: T) -> bool {
+        if index >= self.length {
+            return false
+        }
+
+        mem.copy(&self.data[index], &elem, size_of(T))
+        return true
+    }
+
+    @always_inline
+    pub fn is_empty(self) -> bool {
+        return self.length == 0
+    }
+
+    @always_inline
+    pub fn as_bytes(self) -> []byte {
+        return cast(self.data, []u8, self.length * size_of(T))
+    }
+
+    @always_inline
+    pub fn sort(self, compare: algo.Comparator) {
+        algo.sort(self.data, self.length, size_of(T), compare)
+    }
+
+    @always_inline
+    pub fn contains(self, key: anyptr, eq: algo.Equal) -> bool {
+        return algo.contains(self.data, self.length, size_of(T), key, eq)
+    }
+
+    @always_inline
+    pub fn index_of(self, key: anyptr, eq: algo.Equal) -> (pos: usize, found: bool) {
+        return algo.index_of(self.data, self.length, size_of(T), key, eq)
+    }
+}

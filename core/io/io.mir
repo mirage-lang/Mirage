@@ -1,0 +1,56 @@
+pub type IO_Error_Kind = enum(i32) {
+    // Indicates that the provided path is invalid (it is empty or malformed)
+    Invalid_Path
+
+    // Indicates that one or more arguments passed to the operation are invalid
+    Invalid_Argument
+
+    // Indicates that the requested file does not exist
+    Not_Exist
+    
+    // Indicates that the current process does not have sufficient permissions to perform the requested operation
+    Permission_Denied
+
+    // Indicates that the operation could not be completed immediately and would block
+    Would_Block
+
+    // Indicates that the file handle has been closed
+    Closed
+
+    // Indicates that the operation was interupted before it could complete
+    Interrupted
+
+    // Indicates that an unexpected or otherwise unclassified error occurred
+    Unknown
+
+    // Indicates that the end of file was reached
+    Eof
+}
+
+pub type IO_Error = error(IO_Error_Kind)
+
+pub type Seek_From = enum(u8) {
+    Start
+    Current
+    End
+}
+
+pub type Reader = trait {
+    // Reads a slice of bytes from the source
+    fn read(self, dst: []u8) -> (usize, IO_Error)
+}
+
+pub type Writer = trait {
+    // Writes a slice of bytes to the destination
+    fn write(self, src: []byte) -> (usize, IO_Error)
+}
+
+pub type Stream = trait(Reader, Writer)
+
+pub type Seekable = trait {
+    // Sets the position indicator of the Seekable to offset
+    fn seek(self, offset: i64, whence: Seek_From) -> (i64, IO_Error)
+
+    // Returns the current position indicator of the Seekable
+    fn current(self) -> (i64, IO_Error)
+}

@@ -1,0 +1,188 @@
+const mem := import("core/mem")
+
+const INSERTION_THRESHOLD: usize = 16
+
+pub type Comparator = fn(anyptr, anyptr) -> i32
+pub type Equal = fn(anyptr, anyptr) -> bool
+
+macro at(base: anyptr, i: usize, elem_size: usize) -> base + i * elem_size
+
+fn insertion_sort(base: anyptr, lo: usize, hi: usize, elem_size: usize, compare: Comparator) {
+    for i in (lo + 1)..hi {
+        mut j := i
+        while j > lo && compare(at(base, j, elem_size), at(base, j - 1, elem_size)) < 0 {
+            swap(base, j, j - 1, elem_size)
+            j -= 1
+        }
+    }
+}
+
+fn median_of_three(base: anyptr, lo: usize, hi: usize, elem_size: usize, compare: Comparator) -> usize {
+    const mid  := lo + (hi - lo) / 2 
+    const last := hi - 1
+
+    if compare(at(base, mid, elem_size), at(base, lo, elem_size)) < 0 {
+        swap(base, mid, lo, elem_size)
+    }
+
+    if compare(at(base, last, elem_size), at(base, lo, elem_size)) < 0 {
+        swap(base, last, lo, elem_size)
+    }
+
+    if compare(at(base, last, elem_size), at(base, mid, elem_size)) < 0 {
+        swap(base, last, mid, elem_size)
+    }
+
+    return mid
+}
+
+fn partition(base: anyptr, lo: usize, hi: usize, elem_size: usize, compare: Comparator) -> usize {
+    const mid := median_of_three(base, lo, hi, elem_size, compare)
+    const last := hi - 1
+
+    swap(base, mid, last, elem_size)
+
+    const pivot := at(base, last, elem_size)
+
+    mut store := lo
+    for i in lo..last {
+        if compare(at(base, i, elem_size), pivot) < 0 {
+            swap(base, i, store, elem_size)
+            store++
+        }
+    }
+
+    swap(base, store, last, elem_size)
+    return store
+}
+
+fn quicksort(base: anyptr, mut lo: usize, mut hi: usize, elem_size: usize, compare: Comparator) {
+    while hi - lo > INSERTION_THRESHOLD {
+        const part := partition(base, lo, hi, elem_size, compare)
+        if part - lo < hi - part {
+            quicksort(base, lo, part, elem_size, compare)
+            lo = part + 1
+        } else {
+            quicksort(base, part + 1, hi, elem_size, compare)
+            hi = part
+        }
+    }
+
+    insertion_sort(base, lo, hi, elem_size, compare)
+}
+
+pub fn sort(base: anyptr, elem_count: usize, elem_size: usize, compare: Comparator) {
+    if elem_count < 2 {
+        return
+    }
+    quicksort(base, 0, elem_count, elem_size, compare)
+}
+
+pub fn swap(base: anyptr, i: usize, j: usize, elem_size: usize) {
+    if i == j {
+        return
+    }
+
+    const a: *u8 = at(base, i, elem_size)
+    const b: *u8 = at(base, j, elem_size)
+
+    for k in ..elem_size {
+        const tmp := a[k]
+        a[k] = b[k]
+        b[k] = tmp
+    }
+}
+
+pub fn fill(base: anyptr, elem_count: usize, elem_size: usize, value: anyptr) {
+    for i in ..elem_count {
+        mem.copy(at(base, i, elem_size), value, elem_size)
+    }
+}
+
+pub fn binary_search(base: anyptr, elem_count: usize, elem_size: usize, key: anyptr, compare: Comparator) -> (pos: usize, found: bool) {
+    mut lo: usize = 0
+    mut hi: usize = elem_count
+
+    while lo < hi {
+        const mid := lo + (hi - lo) / 2
+        const c := compare(key, at(base, mid, elem_size))
+
+        if c == 0 {
+            return mid, true
+        } else if c < 0 {
+            hi = mid
+        } else {
+            lo = mid + 1
+        }
+    }
+
+    return lo, false
+}
+
+pub fn index_of(base: anyptr, elem_count: usize, elem_size: usize, key: anyptr, eq: Equal) -> (pos: usize, found: bool) {
+    for i in ..elem_count {
+        if eq(at(base, i, elem_size), key) {
+            return i, true
+        }
+    }
+
+    return ~cast(0, usize), false
+}
+
+pub fn contains(base: anyptr, elem_count: usize, elem_size: usize, key: anyptr, eq: Equal) -> bool {
+    const _, found := index_of(base, elem_count, elem_size, key, eq)
+
+    return found
+}
+
+pub fn equal(a: anyptr, a_count: usize, b: anyptr, b_count: usize, elem_size: usize, eq: Equal) -> bool {
+    if a_count != b_count {
+        return false
+    }
+
+    for i in ..a_count {
+        if !eq(at(a, i, elem_size), at(b, i, elem_size)) {
+            return false
+        }
+    }
+
+    return true
+}
+
+pub fn is_sorted(base: anyptr, elem_count: usize, elem_size: usize, compare: Comparator) -> bool {
+    if elem_count < 2 {
+        return true
+    }
+
+    for i in 1..elem_count {
+        if compare(at(base, i, elem_size), at(base, i - 1, elem_size)) < 0 {
+            return false
+        }
+    }
+
+    return true
+}
+
+pub fn min_index(base: anyptr, elem_count: usize, elem_size: usize, compare: Comparator) -> usize {
+    mut best: usize = 0
+
+    for i in 1..elem_count {
+        if compare(at(base, i, elem_size), at(base, best, elem_size)) < 0 {
+            best = i
+        }
+    }
+
+    return best
+}
+
+pub fn max_index(base: anyptr, elem_count: usize, elem_size: usize, compare: Comparator) -> usize {
+    mut best: usize = 0
+
+    for i in 1..elem_count {
+        if compare(at(base, i, elem_size), at(base, best, elem_size)) > 0 {
+            best = i
+        }
+    }
+
+    return best
+}
