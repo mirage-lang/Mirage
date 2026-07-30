@@ -1,12 +1,12 @@
 type Nil_Allocator = struct {}
 
 impl Allocator for Nil_Allocator {
-    fn alloc(self, size: usize, zero_memory: bool) -> (anyptr, Allocator_Error) {
-        return_ok nil
+    fn alloc(self, size: usize, zero_memory: bool) -> (anyptr, ?Allocator_Error) {
+        return_err .Out_Of_Memory
     }
 
-    fn realloc(self, ptr: anyptr, size: usize) -> (anyptr, Allocator_Error) {
-        return_ok nil
+    fn realloc(self, ptr: anyptr, size: usize) -> (anyptr, ?Allocator_Error) {
+        return_err .Out_Of_Memory
     }
 
     fn free(self, ptr: anyptr) {

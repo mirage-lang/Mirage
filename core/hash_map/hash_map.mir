@@ -1,0 +1,190 @@
+import("runtime")
+import("core/hash")
+
+const INITIAL_CAPACITY: usize = 16
+const MAX_LOAD_NUMERATOR: usize = 3
+const MAX_LOAD_DENOMINATOR: usize = 4
+
+type Slot_State = enum(u8) {
+    Empty
+    Occupied
+    Tombstone
+}
+
+type Slot[K: type, V: type] = struct {
+    state: Slot_State = .Empty
+    key: K
+    value: V
+}
+
+pub type Equal[K: type] = fn(K, K) -> bool
+
+pub type Hash_Map[K: type, V: type] = struct {
+    allocator: Allocator
+    slots: *Slot[K, V] = nil
+    capacity: usize = 0
+    count: usize = 0
+    tomestone_count: usize = 0
+    hash: Hash_Function[K]
+    eq: Equal[K]
+}
+
+fn default_eq[K: type](a: K, b: K) -> bool {
+    return a == b
+}
+
+pub fn make_hash_map[K: type, V: type](allocator := heap_allocator(), hash := fnv1a[K], eq := default_eq[K]) -> Hash_Map[K, V] {
+    return {
+        .allocator = allocator,
+        .hash = hash,
+        .eq = eq,
+    }
+}
+
+impl Hash_Map[K: type, V: type] {
+    pub fn put(self, key: K, value: V) -> ?Allocator_Error {
+        try self.maybe_grow()
+
+        const mask := cast(self.capacity - 1, u64)
+
+        mut idx := self.hash(key) & mask
+        mut first_tombstone := ~cast(0, u64)
+
+        while self.slots[idx].state != .Empty {
+            if self.slots[idx].state == .Occupied {
+                if self.eq(self.slots[idx].key, key) {
+                    self.slots[idx].value = value
+                    return_ok
+                }
+            } else {
+                first_tombstone = idx
+            }
+            idx = (idx + 1) & mask
+        }
+
+        const target := first_tombstone != ~cast(0, u64) ? first_tombstone : idx
+
+        if self.slots[target].state == .Tombstone {
+            self.tomestone_count++
+        }
+
+        self.count++
+        self.slots[target] = {
+            .state = .Occupied,
+            .key = key,
+            .value = value,
+        }
+
+        return_ok
+    }
+
+    pub fn get(self, key: K) -> (V, bool) {
+        const zero: V = default
+
+        if self.capacity == 0 {
+            return default, false
+        }
+
+        const mask := cast(self.capacity - 1, u64)
+        
+        mut idx := self.hash(key) & mask
+        while self.slots[idx].state != .Empty {
+            if self.slots[idx].state == .Occupied && self.eq(self.slots[idx].key, key) {
+                return self.slots[idx].value, true
+            }
+            idx = (idx + 1) & mask
+        }
+
+        return default, false
+    }
+
+    pub fn contains(self, key: K) -> bool {
+        const _, found := self.get(key)
+        return found
+    }
+
+    pub fn remove(self, key: K) -> bool {
+        if self.capacity == 0 {
+            return false
+        }
+
+        const mask := cast(self.capacity - 1, u64)
+
+        mut idx := self.hash(key) & mask
+        while self.slots[idx].state != .Empty {
+            if self.slots[idx].state == .Occupied && self.eq(self.slots[idx].key, key) {
+                self.slots[idx].state = .Tombstone
+                self.count--
+                self.tomestone_count++
+
+                return true
+            }
+        }
+
+        return false
+    }
+
+    pub fn clear(self) {
+        if self.capacity > 0 {
+            for i in ..self.capacity {
+                self.slots[i].state = .Empty
+            }
+        }
+
+        self.count = 0
+        self.tomestone_count = 0
+    }
+
+    pub fn destroy(self) {
+        if self.slots != nil {
+            self.allocator.free(self.slots)
+            self.slots = nil
+            self.capacity = 0
+            self.count = 0
+            self.tomestone_count = 0
+        }
+    }
+
+    @always_inline
+    pub fn is_empty(self) -> bool {
+        return self.count == 0
+    }
+
+    fn maybe_grow(self) -> Allocator_Error {
+        if self.capacity == 0 {
+            return self.grow_to(INITIAL_CAPACITY)
+        }
+
+        if (self.count + self.tomestone_count + 1) * MAX_LOAD_DENOMINATOR > self.capacity * MAX_LOAD_NUMERATOR {
+            return self.grow_to(self.capacity * 2)
+        }
+
+        return_ok
+    }
+
+    fn grow_to(self, new_capacity: usize) -> Allocator_Error {
+        const new_slots: *Slot[K, V] = try self.allocator.alloc(new_capacity * size_of(Slot[K, V]))
+        const new_mask := cast(new_capacity - 1, u64)
+
+        if self.capacity > 0 {
+            for i in ..self.capacity {
+                if self.slots[i].state == .Occupied {
+                    mut j := self.hash(self.slots[i].key) & new_mask
+                    while new_slots[j].state == .Occupied {
+                        j = (j + 1) & new_mask
+                    }
+
+                    new_slots[j] = self.slots[i]
+                }
+            }
+
+            self.allocator.free(self.slots)
+        }
+
+        self.slots = new_slots
+        self.capacity = new_capacity
+        self.tomestone_count = 0
+
+        return_ok
+    }
+}

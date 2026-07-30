@@ -1,7 +1,11 @@
+import("runtime")
 import("core/os")
+import("core/string")
 
 pub fn main() -> File_Error {
-    try stdout.write("Hello World!\n")
+    const str := make_string_from_bytes("Hello World!\n")
+
+    try stdout.write(str.as_bytes())
 
     return_ok
 }

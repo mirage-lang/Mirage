@@ -1,0 +1,31 @@
+pub type Hash_Function[T: type] = fn(value: T) -> u64
+
+const FNV_OFFSET: u64 = 0xcbf29ce484222325
+const FNV_PRIME:  u64 = 0x100000001b3
+
+pub fn splitmix64(x: u64) -> u64 {
+    mut h := x
+    h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9
+    h = (h ^ (h >> 27)) * 0x94d049bb133111eb
+    h = h ^ (h >> 31)
+    return h
+}
+
+pub fn fnv1a_bytes(bytes: []u8) -> u64 {
+    mut h := FNV_OFFSET
+    for b in bytes {
+        h = h ^ cast(b, u64)
+        h = h * FNV_PRIME
+    }
+    return h
+}
+
+pub fn fnv1a[T: type](value: T) -> u64 {
+    const bytes := cast(&value, []u8, size_of(T))
+
+    return splitmix64(fnv1a_bytes(bytes))
+}
+
+pub fn combine_hash(seed: u64, value: u64) -> u64 {
+    return seed ^ (value + 0x9e3779b97f4a7c15 + (seed << 6) + (seed >> 2))
+}
