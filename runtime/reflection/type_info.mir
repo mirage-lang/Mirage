@@ -1,22 +1,17 @@
 pub type Type_Info = union(enum) {
     Pointer: struct {
-        base_type: *Type_Info
+        base_type: Type_Kind_Or_Info
     }
 
     Slice: struct {
-        base_type: *Type_Info
+        base_type: Type_Kind_Or_Info
     }
 
     Array: struct {
-        base_type: *Type_Info
+        base_type: Type_Kind_Or_Info
         length: usize
     }
-
-    Named: struct {
-        name: []u8
-        base_type: *Type_Info
-    }
-
+    
     Struct: struct {
         name: []u8
         fields: []Type_Info_Field
@@ -65,8 +60,8 @@ pub type Type_Info = union(enum) {
 
     Function: struct {
         params: []Type_Info_Param
-        return_types: []*Type_Info
-        is_variadic: bool
+        return_types: []Type_Kind_Or_Info
+        is_variadic:  bool
     }
 
     Trait: struct {
@@ -74,8 +69,9 @@ pub type Type_Info = union(enum) {
         methods: []Type_Info_Method
     }
 
-    Error_Type: struct {
+    Error: struct {
         members: []*Type_Info
+        is_optional: bool
     }
 }
 
@@ -92,13 +88,10 @@ pub type Type_Kind = enum(u32) {
     F64          = 10
     USize        = 11
     Bool         = 12
-    Byte         = 13
     Anyptr       = 14
-    Error        = 15
     Pointer      = 16
     Slice        = 17
     Array        = 18
-    Named        = 19
     Struct       = 20
     Enum         = 21
     Union        = 22
@@ -106,12 +99,20 @@ pub type Type_Kind = enum(u32) {
     Bitset       = 24
     Function     = 25
     Trait        = 26
-    Error_Type   = 27
+    Error        = 27
+    Void         = 28
+    Type         = 29
+    Any          = 30
+}
+
+pub type Type_Kind_Or_Info = union(enum) {
+    kind: Type_Kind
+    info: *Type_Info
 }
 
 pub type Type_Info_Field = struct {
     name: []u8
-    type_info: *Type_Info
+    base_type: Type_Kind_Or_Info
     offset: usize
 }
 
@@ -123,22 +124,29 @@ pub type Type_Info_Enum_Variant = struct {
 pub type Type_Info_Tagged_Variant = struct {
     name: []u8
     tag_value: u32
-    payload: *Type_Info
+    payload: *Type_Kind_Or_Info
 }
 
 pub type Type_Info_Param = struct {
     name: []u8
-    type_info: *Type_Info
+    type_info: Type_Kind_Or_Info
 }
 
 pub type Type_Info_Method = struct {
     name: []u8
-    type_info: *Type_Info
+    type_info: Type_Kind_Or_Info
 }
 
 pub type Type_Info_Generic_Arg = struct {
-    is_type: bool
-    type_arg: *Type_Info
-    value_arg: i64
-    value_arg_type: *Type_Info
+    name: []u8
+    type_info: Type_Kind_Or_Info
+    kind: union(enum) {
+        is_type
+        is_scalar: i64
+    }
+}
+
+pub type Raw_Slice = struct { 
+    data: anyptr 
+    length: usize 
 }

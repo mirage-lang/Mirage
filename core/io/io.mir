@@ -37,20 +37,20 @@ pub type Seek_From = enum(u8) {
 
 pub type Reader = trait {
     // Reads a slice of bytes from the source
-    fn read(self, dst: []u8) -> (usize, IO_Error)
+    fn read(self, dst: []u8) -> (usize, ?IO_Error)
 }
 
 pub type Writer = trait {
     // Writes a slice of bytes to the destination
-    fn write(self, src: []byte) -> (usize, IO_Error)
+    fn write(self, src: []byte) -> (usize, ?IO_Error)
 }
 
 pub type Stream = trait(Reader, Writer)
 
 pub type Seekable = trait {
     // Sets the position indicator of the Seekable to offset
-    fn seek(self, offset: i64, whence: Seek_From) -> (i64, IO_Error)
+    fn seek(self, offset: i64, whence: Seek_From) -> (i64, ?IO_Error)
 
     // Returns the current position indicator of the Seekable
-    fn current(self) -> (i64, IO_Error)
+    fn current(self) -> (i64, ?IO_Error)
 }

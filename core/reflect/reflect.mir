@@ -1,0 +1,86 @@
+import("runtime")
+import("runtime/reflection")
+
+pub fn size_of_type_kind(kind: Type_Kind) -> usize {
+    return match kind {
+        .U8:     1,
+        .I8:     1,
+        .Bool:   1,
+        .U16:    2,
+        .I16:    2,
+        .U32:    4,
+        .I32:    4,
+        .F32:    4,
+        .U64:    8,
+        .I64:    8,
+        .F64:    8,
+        .USize:  size_of(anyptr),
+        .Anyptr: size_of(anyptr),
+        _:       1,
+    }
+}
+
+pub fn size_of_type_info_or_kind(tko: Type_Kind_Or_Info) -> usize {
+    return match tko {
+        .kind(k):  size_of_type_kind(k),
+        .info(ti): size_of_type_info_value(ti),
+    }
+}
+
+pub fn size_of_type_info_value(ti: *Type_Info) -> usize {
+    if ti == nil {
+        return 0
+    }
+
+    return match ti.* {
+        .Pointer(p):      size_of(anyptr),
+        .Slice(p):        size_of(anyptr) + size_of(usize),
+        .Array(a):        a.length * size_of_type_info_or_kind(a.base_type),
+        .Struct(s):       s.size,
+        .Enum(e):         e.size,
+        .Union(u):        u.size,
+        .Tagged_Union(t): t.size,
+        .Bitset(b):       b.size,
+        _: 0,
+    }
+}
+
+pub fn alignment_of_kind_or_info(tko: Type_Kind_Or_Info) -> usize {
+    return match tko {
+        .kind(k):  size_of_type_kind(k),
+        .info(ti): alignment_of_type_info(ti),
+    }
+}
+
+pub fn alignment_of_type_info(ti: *Type_Info) -> usize {
+    if ti == nil {
+        return 1
+    }
+
+    return match ti.* {
+        .Pointer(p):        size_of(anyptr),
+        .Slice(s):          size_of(anyptr),
+        .Array(a):          alignment_of_kind_or_info(a.base_type),
+        .Struct(s):         s.align,
+        .Union(u):          u.align,
+        .Tagged_Union(t):   t.align,
+        .Enum(e):           size_of_type_kind(e.storage_kind),
+        .Bitset(b):         size_of_type_kind(b.storage_kind),
+        _: 1
+    }
+}
+
+pub fn int_value_of(kind: Type_Kind, data: anyptr) -> i64 {
+    return match kind {
+        .U8:    cast(cast(data, *u8).*, i64),
+        .I8:    cast(cast(data, *i8).*, i64),
+        .U16:   cast(cast(data, *u16).*, i64),
+        .I16:   cast(cast(data, *i16).*, i64),
+        .U32:   cast(cast(data, *u32).*, i64),
+        .I32:   cast(cast(data, *i32).*, i64),
+        .U64:   cast(cast(data, *u64).*, i64),
+        .I64:   cast(data, *i64).*,
+        .USize: cast(cast(data, *usize).*, i64),
+        _: 0,
+    }
+}

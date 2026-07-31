@@ -89,7 +89,7 @@ fn _open(name: []u8, flags: File_Flags) -> (*Linux_File, File_Error) {
 }
 
 impl File for Linux_File {
-    fn read(self, dst: []u8) -> (usize, IO_Error) {
+    fn read(self, dst: []u8) -> (usize, ?IO_Error) {
         const result := linux.read(self.fd, dst, len(dst))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
@@ -102,7 +102,7 @@ impl File for Linux_File {
         return_ok cast(result, usize)
     }
 
-    fn write(self, src: []byte) -> (usize, IO_Error) {
+    fn write(self, src: []byte) -> (usize, ?IO_Error) {
         const result := linux.write(self.fd, src, len(src))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
@@ -111,7 +111,7 @@ impl File for Linux_File {
         return_ok cast(result, usize)
     }
 
-    fn seek(self, offset: i64, whence: Seek_From) -> (i64, IO_Error) {
+    fn seek(self, offset: i64, whence: Seek_From) -> (i64, ?IO_Error) {
         const result := linux.lseek(self.fd, offset, cast(whence, i32))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
@@ -120,7 +120,7 @@ impl File for Linux_File {
         return_ok result
     }
 
-    fn current(self) -> (i64, IO_Error) {
+    fn current(self) -> (i64, ?IO_Error) {
         return self.seek(0, .Current)
     }
 

@@ -13,6 +13,8 @@ pub type String = struct {
     capacity: usize = 0
 }
 
+pub type String_View = []u8
+
 pub fn make_string(allocator := heap_allocator()) -> String {
     return {
         .allocator = allocator,
@@ -78,9 +80,10 @@ impl String {
 
     pub fn append_byte(self, b: u8) -> ?Allocator_Error {
         try self.ensure_space_available(1)
-        self.data[self.length] = b
-        self.length++
+
+        self.data[self.length++] = b
         self.data[self.length] = 0
+
         return_ok
     }
 
@@ -91,6 +94,7 @@ impl String {
         }
 
         try self.ensure_space_available(n)
+
         mem.copy(&self.data[self.length], bytes, n)
         
         self.length += n
@@ -187,12 +191,12 @@ pub fn ends_with(bytes: []u8, suffix: []u8) -> bool {
         return true
     }
 
-    const nn := len(bytes)
-    if n > nn {
+    const end := len(bytes)
+    if n > end {
         return false
     }
     
-    return mem.compare(&bytes[nn - n], suffix, n) == 0
+    return mem.compare(&bytes[end - n], suffix, n) == 0
 }
 
 pub fn string_hash(str: String) -> u64 {

@@ -1,11 +1,10 @@
 import("runtime")
 import("core/os")
 import("core/string")
+import("core/fmt")
 
-pub fn main() -> File_Error {
+pub fn main() {
     const str := make_string_from_bytes("Hello World!\n")
 
-    try stdout.write(str.as_bytes())
-
-    return_ok
+    print("Hello {}!\n", "World")
 }

@@ -1,0 +1,510 @@
+import("runtime")
+import("runtime/reflection")
+
+import("core/io")
+import("core/string")
+
+const list    := import("core/list")
+const mem     := import("core/mem")
+const os      := import("core/os")
+const reflect := import("core/reflect")
+
+pub type Fmt_Error = error(Allocator_Error_Kind | Fmt_Error_Kind)
+pub type Fmt_Error_Kind = enum {
+    Unsupported_Type
+    Invalid_Format_String
+    Too_Few_Arguments
+    Too_Many_Arguments
+}
+
+pub type Print_Error = error(Allocator_Error_Kind | Fmt_Error_Kind | IO_Error_Kind)
+
+type Visited = list.List[anyptr]
+
+const MAX_DIGITS: usize = 64
+
+fn to_char(digit: u32, uppercase: bool) -> u8 {
+    if digit < 10 {
+        return cast(digit, u8) + '0'
+    }
+
+    return cast(digit - 10, u8) + (uppercase ? 'A' : 'a')
+}
+
+fn format_int[T: type](out: *String, value: T, base: u32, uppercase: bool, min_digits: usize) -> Allocator_Error {
+    mut n := value
+    mut digits: [MAX_DIGITS]u8 = undefined
+    mut count: usize = 0
+
+    if value < 0 {
+        try out.append_byte('-')
+    }
+
+    if n == default {
+        digits[0] = '0'
+        count = 1
+    } else {
+        const base_t := cast(base, T)
+        while n != default {
+            mut digit := n % base_t
+            if digit < default {
+                digit = -digit
+            }
+
+            digits[count++] = to_char(cast(digit, u32), uppercase)
+            n = n / base_t
+        }
+    }
+
+    if count < min_digits {
+        for _ in ..(min_digits - count) {
+            try out.append_byte('0')
+        }
+    }
+
+    mut i := count
+    while i > 0 {
+        try out.append_byte(digits[--i])
+    }
+
+    return_ok
+}
+
+fn format_bytes_as_hex(out: *String, data: anyptr, n: usize) -> Allocator_Error {
+    try out.append_bytes("0x")
+
+    const bytes: *u8 = data
+    for i in ..n {
+        try format_int(out, bytes[i], 16, false ,2)
+    }
+
+    return_ok
+}
+
+fn format_f64(out: *String, value: f64) -> Allocator_Error {
+    mut bits: u64 = undefined
+    mem.copy(&bits, &value, size_of(f64))
+
+    const sign_bit := (bits >> 63) & 1
+    const exponent := (bits >> 52) & 0x7FF
+    const mantissa := bits & 0xFFFFFFFFFFFFF
+
+    if exponent == 0x7FF {
+        if mantissa == 0 {
+            try out.append_bytes(sign_bit == 1 ? "-Infinity" : "Infinity")
+        } else {
+            try out.append_bytes("NaN")
+        }
+        return_ok
+    }
+
+    mut v := value
+    if v < 0.0 {
+        try out.append_byte('-')
+        v = -v
+    }
+
+    const int_part := cast(v, u64)
+    try format_int(out, int_part, 10, false, 0)
+    try out.append_byte('.')
+
+    mut frac := v - cast(int_part, f64)
+    for _ in ..6 {
+        frac *= 10.0
+        const digit := cast(frac, u64)
+        try format_int(out, digit, 10, false, 0)
+        frac -= cast(digit, f64)
+    }
+
+    return_ok
+}
+
+fn format_f32(out: *String, value: f32) -> Allocator_Error {
+    mut bits: u32 = undefined
+    mem.copy(&bits, &value, size_of(f32))
+
+    const sign_bit := (bits >> 31) & 1
+    const exponent := (bits >> 23) & 0xFF
+    const mantissa := bits & 0x7FFFFF
+
+    if exponent == 0xFF {
+        if mantissa == 0 {
+            try out.append_bytes(sign_bit == 1 ? "-Infinity" : "Infinity")
+        } else {
+            try out.append_bytes("NaN")
+        }
+        return_ok
+    }
+
+    mut v := value
+    if v < 0.0 {
+        try out.append_byte('-')
+        v = -v
+    }
+
+    const int_part := cast(v, u32)
+    try format_int(out, int_part, 10, false, 0)
+    try out.append_byte('.')
+
+    mut frac := v - cast(int_part, f32)
+    for _ in ..6 {
+        frac *= 10.0
+        const digit := cast(frac, u32)
+        try format_int(out, digit, 10, false, 0)
+        frac -= cast(digit, f32)
+    }
+
+    return_ok
+}
+
+@always_inline
+fn format_bool(out: *String, value: bool) -> Allocator_Error {
+    return out.append_bytes(value ? "true" : "false")
+}
+
+fn format_ptr(out: *String, value: anyptr) -> Allocator_Error {
+    out.append_bytes("0x")
+
+    return format_int(out, cast(value, usize), 16, false, size_of(anyptr) * 2)
+}
+
+@always_inline
+fn format_scalar_or_typed(out: *String, tko: Type_Kind_Or_Info, data: anyptr, visited: *Visited) -> Fmt_Error {
+    return match tko {
+        .kind(k):  format_scalar(out, k, data),
+        .info(ti): format_typed(out, ti, data, visited),
+    }
+}
+
+
+fn format_scalar(out: *String, scalar_kind: Type_Kind, data: anyptr) -> Fmt_Error {
+    switch scalar_kind {
+        .U8:     try format_int(out,  cast(data, *u8).*,    10, false, 0),
+        .I8:     try format_int(out,  cast(data, *i8).*,    10, false, 0),
+        .U16:    try format_int(out,  cast(data, *u16).*,   10, false, 0),
+        .I16:    try format_int(out,  cast(data, *i16).*,   10, false, 0),
+        .U32:    try format_int(out,  cast(data, *u32).*,   10, false, 0),
+        .I32:    try format_int(out,  cast(data, *i32).*,   10, false, 0),
+        .U64:    try format_int(out,  cast(data, *u64).*,   10, false, 0),
+        .I64:    try format_int(out,  cast(data, *i64).*,   10, false, 0),
+        .USize:  try format_int(out,  cast(data, *usize).*, 10, false, 0),
+        .Bool:   try format_bool(out, cast(data, *bool).*),
+        .F32:    try format_f32(out,  cast(data, *f32).*),
+        .F64:    try format_f64(out,  cast(data, *f64).*),
+        .Anyptr: try format_ptr(out,  cast(data, *anyptr).*),
+
+        _: try out.append_bytes("<unsupported>")
+    }
+    return_ok
+}
+
+fn format_typed(out: *String, ti: *Type_Info, data: anyptr, visited: *Visited) -> Fmt_Error {
+    if ti == nil {
+        try out.append_bytes("<unknown>")
+        return_ok
+    }
+
+    switch ti.* {
+        .Pointer(p): {
+            const addr := cast(data, *anyptr).*
+
+            try out.append_bytes("0x")
+            try format_int(out, cast(addr, usize), 16, false, size_of(anyptr) * 2)
+
+            if addr != nil {
+                mut already_visited := false
+                for i in ..visited.length {
+                    const seen, _ := visited.get(i)
+                    if seen == addr {
+                        already_visited = true
+                        break
+                    }
+                }
+
+                if already_visited {
+                    try out.append_bytes(" -> <cycle>")
+                } else {
+                    try visited.push(addr)
+                    try out.append_bytes(" -> ")
+                    try format_scalar_or_typed(out, p.base_type, addr, visited)
+                    visited.pop()
+                }
+            }
+        },
+
+        .Slice(s): try format_slice(out, s.base_type, data, visited),
+        .Array(arr): try format_array(out, arr.base_type, arr.length, data, visited),
+
+        .Struct(s): {
+            try out.append_bytes(s.name)
+            try out.append_byte('{')
+
+            for i in ..len(s.fields) {
+                if i > 0 {
+                    try out.append_bytes(", ")
+                }
+
+                const field := &s.fields[i]
+
+                try out.append_bytes(field.name)
+                try out.append_bytes(": ")
+                try format_scalar_or_typed(out, field.base_type, data + field.offset, visited)
+            }
+
+            try out.append_byte('}')
+        },
+
+        .Enum(e): {
+            const value := reflect.int_value_of(e.storage_kind, data)
+
+            mut matched := false
+            for i in ..len(e.variants) {
+                if e.variants[i].value == value {
+                    try out.append_bytes(e.variants[i].name)
+                    matched = true
+                    break
+                }
+            }
+            
+            if !matched {
+                try out.append_bytes(e.name)
+                try out.append_byte('(')
+                try format_int(out, value, 10, false, 0)
+                try out.append_byte(')')
+            }
+        },
+
+        .Union(u): try format_bytes_as_hex(out, data, u.size),
+
+        .Tagged_Union(tu): {
+            const tag := cast(data, *u32).*
+
+            mut found := false
+            for i in ..len(tu.variants) {
+                const variant := &tu.variants[i]
+                if variant.tag_value == tag {
+
+                    try out.append_bytes(tu.name)
+                    try out.append_byte('.')
+                    try out.append_bytes(variant.name)
+
+                    if variant.payload != nil {
+                        const payload_align := reflect.alignment_of_kind_or_info(variant.payload.*)
+                        const payload_offset: usize = (size_of(u32) + payload_align - 1) & ~(payload_align - 1)
+
+                        try out.append_byte('{')
+                        try format_scalar_or_typed(out, variant.payload.*, data +payload_offset, visited)
+                        try out.append_byte('}')
+                    }
+
+                    found = true
+                    break
+                }
+            }
+
+            if !found {
+                try out.append_bytes(tu.name)
+                try out.append_bytes("<unknown tag ")
+                try format_int(out, tag, 10, false, 0)
+                try out.append_byte('>')
+            }
+        },
+        
+        .Bitset(b): {
+            const value := reflect.int_value_of(b.storage_kind, data)
+
+            try out.append_byte('{')
+
+            mut wrote_any := false
+            if b.member_type != nil {
+                switch b.member_type.* {
+                    .Enum(e): {
+                        for i in ..len(e.variants) {
+                            const bit_index := e.variants[i].value + 1
+                            if ((value >> bit_index) & 1) != 1 {
+                                continue
+                            }
+
+                            if wrote_any {
+                                try out.append_bytes(", ")
+                            }
+
+                            try out.append_byte('.')
+                            try out.append_bytes(e.variants[i].name)
+
+                            wrote_any = true
+                        }
+                    }
+                }
+            }
+
+            try out.append_byte('}')
+        },
+
+        .Function(f): try out.append_bytes("<function>"),
+
+        .Trait(t): {
+            try out.append_bytes("<trait ")
+            try out.append_bytes(t.name)
+            try out.append_byte('>')
+        },
+
+        .Error(e): try out.append_bytes("<error>")
+    }
+
+    return_ok
+}
+
+fn format_slice(out: *String, elem: Type_Kind_Or_Info, data: anyptr, visited: *Visited) -> Fmt_Error {
+    const raw: *Raw_Slice = data
+    const elem_size := reflect.size_of_type_info_or_kind(elem)
+
+    try out.append_byte('[')
+    for i in ..raw.length {
+        if i > 0 {
+            try out.append_byte(',')
+        }
+        try format_scalar_or_typed(out, elem, raw.data + i * elem_size, visited)
+    }
+    try out.append_byte(']')
+
+    return_ok
+}
+
+fn format_array(out: *String, elem: Type_Kind_Or_Info, length: usize, data: anyptr, visited: *Visited) -> Fmt_Error {
+    const elem_size := reflect.size_of_type_info_or_kind(elem)
+
+    try out.append_byte('[')
+    for i in ..length {
+        if i > 0 {
+            try out.append_byte(',')
+        }
+        try format_scalar_or_typed(out, elem, data + i * elem_size, visited)
+    }
+    try out.append_byte(']')
+
+    return_ok
+}
+
+fn format_any(out: *String, value: any) -> Fmt_Error {
+    const id := type_of(value)
+
+    if id == type_of(String) {
+        try out.append(cast(value, *String).*)
+        return_ok
+    }
+
+    if id == type_of(String_View) {
+        try out.append_bytes(cast(value, *String_View).*)
+        return_ok
+    }
+
+    if id == type_of(bool) {
+        try out.append_bytes(cast(value, *bool).* ? "true" : "false")
+        return_ok
+    }
+
+    if id == type_of(i8)     { try format_int(out, cast(value, *i8).*,  10, false, 0); return_ok }
+    if id == type_of(u8)     { try format_int(out, cast(value, *u8).*,  10, false, 0); return_ok }
+    if id == type_of(i16)    { try format_int(out, cast(value, *i16).*, 10, false, 0); return_ok }
+    if id == type_of(u16)    { try format_int(out, cast(value, *u16).*, 10, false, 0); return_ok }
+    if id == type_of(i32)    { try format_int(out, cast(value, *i32).*, 10, false, 0); return_ok }
+    if id == type_of(u32)    { try format_int(out, cast(value, *u32).*, 10, false, 0); return_ok }
+    if id == type_of(i64)    { try format_int(out, cast(value, *i64).*, 10, false, 0); return_ok }
+    if id == type_of(u64)    { try format_int(out, cast(value, *u64).*, 10, false, 0); return_ok }
+    if id == type_of(usize)  { try format_int(out, cast(value, *usize).*, 10, false, 0); return_ok }
+    if id == type_of(f32)    { try format_f32(out, cast(value, *f32).*); return_ok }
+    if id == type_of(f64)    { try format_f64(out, cast(value, *f64).*); return_ok }
+
+    if id == type_of(anyptr) {
+        const p := cast(value, *anyptr).*
+        try out.append_bytes("0x")
+        try format_int(out, cast(p, usize), 16, false, size_of(anyptr) * 2)
+        return_ok
+    }
+
+    const info := type_info_of(value)
+    if info == nil {
+        return_err .Unsupported_Type
+    }
+
+    const ti: *Type_Info = cast(info, *Type_Info)
+    const data := cast(value, anyptr)
+
+    mut visited := list.make_list[anyptr](out.allocator)
+    defer visited.destroy()
+
+    try format_typed(out, ti, data, &visited)
+
+    return_ok
+}
+
+pub fn format(template: []u8, args: ...any) -> (String, Fmt_Error) {
+    const out := make_string()
+    const n := len(template)
+    
+    mut arg: usize = 0
+    mut i: usize = 0
+
+    while i < n {
+        const c := template[i++]
+
+        if c == '{' {
+            if i < n && template[i] == '{' {
+                try out.append_byte('{')
+                i++
+
+                continue
+            }
+
+            if i < n && template[i] == '}' {
+                if arg >= len(args) {
+                    return_err .Too_Few_Arguments
+                }
+
+                try format_any(&out, args[arg++])
+                i++
+
+                continue
+            }
+
+            out.destroy()
+            return_err .Invalid_Format_String
+        }
+
+        if c == '}' {
+            if i < n && template[i] == '}' {
+                try out.append_byte('}')
+                i++
+
+                continue
+            }
+
+            out.destroy()
+            return_err .Invalid_Format_String
+        }
+
+        try out.append_byte(c)
+    }
+
+    if arg < len(args) {
+        out.destroy()
+        return_err .Too_Many_Arguments
+    }
+
+    return_ok out
+}
+
+@always_inline
+pub fn print(template: []u8, args: ...any) -> ?Print_Error {
+    return print_to(os.stdout, template, args...)
+}
+
+pub fn print_to(w: Writer, template: []u8, args: ...any) -> ?Print_Error {
+    const result := try format(template, args...)
+    defer result.destroy()
+
+    try w.write(result.as_bytes())
+    
+    return_ok
+}
