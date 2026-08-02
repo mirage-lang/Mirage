@@ -1,0 +1,9 @@
+@always_inline
+pub fn max[T: type](a: T, b: T) -> T {
+    return a > b ? a : b
+}
+
+@always_inline
+pub fn abs[T: type](val: T) -> T {
+    return val < default ? -val : val
+}

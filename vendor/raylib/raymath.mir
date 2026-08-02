@@ -1,0 +1,141 @@
+/**********************************************************************************************
+*
+*   raymath v2.0 - Math functions to work with Vector2, Vector3, Vector4, Matrix and Quaternions
+*
+*   CONVENTIONS:
+*     - Matrix structure is defined as row-major (memory layout) but parameters naming AND all
+*       math operations performed by the library consider the structure as it was column-major
+*       It is like transposed versions of the matrices are used for all the maths
+*       It benefits some functions making them cache-friendly and also avoids matrix
+*       transpositions sometimes required by OpenGL
+*       Example: In memory order, row0 is [m0 m4 m8 m12] but in semantic math row0 is [m0 m1 m2 m3]
+*     - Functions are always self-contained, no function use another raymath function inside,
+*       required code is directly re-implemented inside
+*     - Functions input parameters are always received by value (2 unavoidable exceptions)
+*     - Functions use always a "result" variable for return (except C++ operators)
+*     - Functions are always defined inline
+*     - Angles are always in radians (DEG2RAD/RAD2DEG macros provided for convenience)
+*     - No compound literals used to make sure the library is compatible with C++
+*
+*   CONFIGURATION:
+*       #define RAYMATH_IMPLEMENTATION
+*           Generates the implementation of the library into the included file
+*           If not defined, the library is in header only mode and can be included in other headers
+*           or source files without problems. But only ONE file should hold the implementation
+*
+*       #define RAYMATH_STATIC_INLINE
+*           Define static inline functions code, so #include header suffices for use
+*           This may use up lots of memory
+*
+*       #define RAYMATH_DISABLE_CPP_OPERATORS
+*           Disables C++ operator overloads for raymath types.
+*
+*       #define RAYMATH_USE_SIMD_INTRINSICS   1
+*           Try to enable SIMD intrinsics for MatrixMultiply()
+*           Note that users enabling it must be aware of the target platform where application will
+*           run to support the selected SIMD intrinsic, for now, only SSE is supported
+*
+*   LICENSE: zlib/libpng
+*
+*   Copyright (c) 2015-2026 Ramon Santamaria (@raysan5)
+*
+*   This software is provided "as-is", without any express or implied warranty. In no event
+*   will the authors be held liable for any damages arising from the use of this software.
+*
+*   Permission is granted to anyone to use this software for any purpose, including commercial
+*   applications, and to alter it and redistribute it freely, subject to the following restrictions:
+*
+*     1. The origin of this software must not be misrepresented; you must not claim that you
+*     wrote the original software. If you use this software in a product, an acknowledgment
+*     in the product documentation would be appreciated but is not required.
+*
+*     2. Altered source versions must be plainly marked as such, and must not be misrepresented
+*     as being the original software.
+*
+*     3. This notice may not be removed or altered from any source distribution.
+*
+**********************************************************************************************/
+import("core/math")
+
+//------------------------------------------------------------------------------
+// Defines and Macros
+//------------------------------------------------------------------------------
+pub const EPSILON: f32 = 0.000001
+
+//------------------------------------------------------------------------------
+// Module Functions Definition - Utils math
+//------------------------------------------------------------------------------
+
+// Clamp float value
+pub fn Clamp(value: f32, min: f32, max: f32) -> f32 {
+    mut result := value < min ? min : value
+
+    if result > max { result = max }
+
+    return result
+}
+
+// Calculate linear interpolation between two floats
+pub fn Lerp(start: f32, end: f32, amount: f32) -> f32 {
+    const result := start + amount * (end - start)
+
+    return result
+}
+
+// Normalize input value within input range
+pub fn Normalize(value: f32, start: f32, end: f32) -> f32 {
+    const result := (value - start) / (end - start)
+
+    return result
+}
+
+// Remap input value within input range to output range
+pub fn Remap(value: f32, inputStart: f32, inputEnd: f32, outputStart: f32, outputEnd: f32) -> f32 {
+    const result := (value - inputStart) / (inputEnd - inputStart) * (outputEnd - outputStart) + outputStart
+
+    return result
+}
+
+// Wrap input value from min to max
+// pub fn Wrap(value: f32, min: f32, max: f32) -> f32 {
+//     const result := value - (max - min) * floorf((value - min) / (max - min))
+
+//     return result
+// }
+
+// Check whether two given floats are almost equal
+pub fn FloatEquals(x: f32, y: f32) -> bool {
+    const result := (abs(x - y)) <= (EPSILON * max[f32](1.0, max(abs(x), abs(y))))
+
+    return result
+}
+
+//------------------------------------------------------------------------------
+// Module Functions Definition - Vector2 math
+//------------------------------------------------------------------------------
+
+// Vector with components value 0.0f
+pub fn Vector2Zero() -> Vector2 {
+    return {0.0, 0.0}
+}
+
+// Vector with components value 1.0f
+pub fn Vector2One() -> Vector2 {
+    return {1.0, 1.0}
+}
+
+// Add two vectors (v1 + v2)
+pub fn Vector2Add(v1: Vector2, v2: Vector2) -> Vector2 {
+    return {v1.x + v2.x, v1.y + v2.y}
+}
+
+// Add vector and float value
+pub fn Vector2AddValue(v: Vector2, add: f32) -> Vector2 {
+    return {v.x + add, v.y + add}
+}
+
+// Check whether two given vectors are almost equal
+pub fn Vector2Equals(p: Vector2,  q: Vector2) -> bool {
+    return ((abs(p.x - q.x)) <= (EPSILON * max[f32](1.0, max(abs(p.x), abs(q.x))))) &&
+           ((abs(p.y - q.y)) <= (EPSILON * max[f32](1.0, max(abs(p.y), abs(q.y)))));
+}

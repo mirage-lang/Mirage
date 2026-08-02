@@ -89,7 +89,7 @@ pub const RAYLIB_VERSION := "6.1-dev"
 //-------------------------------------------------------------------------------
 // Defines and Macros
 //-------------------------------------------------------------------------------
-const PI      := 3.14159265358979323846
+const PI: f32  = 3.14159265358979323846
 const DEG2RAD := PI / 180.0
 const RAD2DEG := 180.0 / PI
 
@@ -1018,8 +1018,8 @@ pub ext fn TraceLog(logLevel: TraceLogLevel, text: *u8, ...) // Show trace log m
 pub ext fn SetTraceLogCallback(callback: TraceLogCallback) // Set custom trace log
 
 // Memory management, using internal allocators
-pub ext fn MemAlloc(size: u32) -> anyptr // Internal memory allocator
-pub ext fn MemRealloc(ptr: anyptr, size: u32) -> anyptr // Internal memory reallocator
+pub ext fn MemAlloc(size: usize) -> anyptr // Internal memory allocator
+pub ext fn MemRealloc(ptr: anyptr, size: usize) -> anyptr // Internal memory reallocator
 pub ext fn MemFree(ptr: anyptr) // Internal memory free
 
 // File system management functions
@@ -1133,7 +1133,7 @@ pub ext fn SetMouseOffset(offsetX: i32, offsetY: i32) // Set mouse offset
 pub ext fn SetMouseScale(scaleX: f32, scaleY: f32) // Set mouse scaling
 pub ext fn GetMouseWheelMove() -> f32 // Get mouse wheel movement for X or Y, whichever is larger
 pub ext fn GetMouseWheelMoveV() -> Vector2 // Get mouse wheel movement for both X and Y
-pub ext fn SetMouseCursor(cursor: i32) // Set mouse cursor
+pub ext fn SetMouseCursor(cursor: MouseCursor) // Set mouse cursor
 
 // Input-related functions: touch
 pub ext fn GetTouchX() -> i32 // Get touch position X for touch point 0 (relative to screen size)
