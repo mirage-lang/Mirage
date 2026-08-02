@@ -1,0 +1,234 @@
+const linux := import("core/sys/linux")
+
+pub type Linux_Socket = struct {
+    allocator: Allocator
+    fd: linux.Fd
+    addr: linux.sockaddr_in
+}
+
+@always_inline
+fn _alloc_socket(fd: linux.Fd, addr: linux.sockaddr_in) -> (*Linux_Socket, Net_Error) {
+    const allocator := heap_allocator()
+    const socket: *Linux_Socket = try allocator.alloc(size_of(Linux_Socket))
+
+    socket.* = {
+        .allocator = allocator,
+        .fd = fd,
+        .addr = addr,
+    }
+
+    return_ok socket
+}
+
+@always_inline
+fn _map_errno_to_io_error(errno: i64) -> IO_Error {
+    return match errno {
+        linux.EINVAL:       .Invalid_Argument,
+        linux.ENOENT:       .Not_Exist,
+        linux.EACCES:       .Permission_Denied,
+        linux.EPERM:        .Permission_Denied,
+        linux.EAGAIN:       .Would_Block,
+        linux.EINPROGRESS:  .Would_Block,
+        linux.EALREADY:     .Would_Block,
+        linux.EBADF:        .Closed,
+        linux.EPIPE:        .Closed,
+        linux.ECONNRESET:   .Closed,
+        linux.ECONNABORTED: .Closed,
+        linux.ENOTCONN:     .Closed,
+        linux.EINTR:        .Interrupted,
+
+        _: .Unknown
+    }
+}
+
+fn _make_sockaddr(address: []u8, port: u16) -> (linux.sockaddr_in, IO_Error) {
+    const ip, ok := try_parse_ipv4(address)
+    if !ok {
+        return_err .Invalid_Argument
+    }
+
+    return_ok {
+        .sin_family = cast(linux.AF_INET, u16),
+        .sin_port = linux.htons(port),
+        .sin_addr = ip,
+    }
+}
+
+fn _set_nonblocking(fd: linux.Fd, nonblocking: bool) -> ?IO_Error {
+    const flags := linux.fcntl(fd, linux.F_GETFL, 0)
+    if flags < 0 {
+        return_err _map_errno_to_io_error(-flags)
+    }
+
+    mut new_flags := flags
+    if nonblocking {
+        new_flags |= cast(linux.O_NONBLOCK, i64)
+    } else {
+        new_flags &= ~cast(linux.O_NONBLOCK, i64)
+    }
+
+    const result := linux.fcntl(fd, linux.F_SETFL, new_flags)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    return_ok
+}
+
+fn _tcp_connect(address: []u8, port: u16, nonblocking: bool) -> (*Linux_Socket, Net_Error) {
+    const addr := try _make_sockaddr(address, port)
+
+    mut result := linux.socket(linux.AF_INET, linux.SOCK_STREAM, 0)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    const fd := cast(result, linux.Fd)
+
+    if nonblocking {
+        const err := _set_nonblocking(fd, true)
+        if err {
+            linux.close(fd)
+            return_err err
+        }
+    }
+
+    result = linux.connect(fd, &addr, cast(size_of(addr), i32))
+    if result < 0 {
+        const in_progress := nonblocking && -result == linux.EINPROGRESS || -result == linux.EAGAIN
+
+        if !in_progress {
+            linux.close(fd)
+            return_err _map_errno_to_io_error(-result)
+        }
+    }
+
+    const socket, err := _alloc_socket(fd, addr)
+    defer if err {
+        linux.close(fd)
+    }
+
+    if err {
+        return_err err
+    }
+
+    return_ok socket
+}
+
+fn _tcp_listen(address: []u8, port: u16, backlog: i32) -> (*Linux_Socket, Net_Error) {
+    const addr := try _make_sockaddr(address, port)
+
+    mut result := linux.socket(linux.AF_INET, linux.SOCK_STREAM, 0)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    const fd := cast(result, linux.Fd)
+
+    mut reuse: i32 = 1
+    linux.setsockopt(fd, linux.SOL_SOCKET, linux.SO_REUSEADDR, &reuse, cast(size_of(i32), i32))
+
+    result = linux.bind(fd, &addr, cast(size_of(addr), i32))
+    if result < 0 {
+        linux.close(fd)
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    result = linux.listen(fd, backlog)
+    if result < 0 {
+        linux.close(fd)
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    const socket, err := _alloc_socket(fd, addr)
+    defer if err {
+        linux.close(fd)
+    }
+
+    if err {
+        return_err err
+    }
+
+    return_ok socket
+}
+
+impl Socket for Linux_Socket {
+    fn read(self, dst: []u8) -> (usize, ?IO_Error) {
+        const result := linux.read(self.fd, dst, len(dst))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        if result == 0 {
+            return_err .Closed
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn write(self, src: []u8) -> (usize, ?IO_Error) {
+        const result := linux.write(self.fd, src, len(src))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn close(self) -> ?IO_Error {
+        const result := linux.close(self.fd)
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok
+    }
+    
+    fn set_nonblocking(self, nonblocking: bool) -> ?IO_Error {
+        return _set_nonblocking(self.fd, nonblocking)
+    }
+
+    fn finish_connect(self) -> (bool, ?IO_Error) {
+        const result := linux.connect(self.fd, &self.addr, cast(size_of(self.addr), i32))
+        if result >= 0 || -result == cast(linux.EISCONN, i64) {
+
+        }
+
+        if -result == linux.EALREADY || -result == linux.EINPROGRESS || -result == linux.EAGAIN {
+            return_ok false
+        }
+
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    fn accept(self) -> (Socket, ?Net_Error) {
+        const result := linux.accept4(self.fd, nil, nil, 0)
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        const fd := cast(result, linux.Fd)
+
+        const socket, err := _alloc_socket(fd, default)
+        defer if err {
+            linux.close(fd)
+        }
+
+        if err {
+            return_err err
+        }
+
+        return_ok socket
+    }
+
+    fn destroy(self) {
+        if self.fd == -1 {
+            return
+        }
+
+        linux.close(self.fd)
+
+        self.fd = -1
+        self.allocator.free(self)
+    }
+}

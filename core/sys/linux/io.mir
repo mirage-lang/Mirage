@@ -14,3 +14,6 @@ pub const O_NOFOLLOW    := 0o00400000
 pub const O_CLOEXEC     := 0o02000000
 pub const O_SYNC        := 0o04000000 | O_DSYNC
 pub const O_TMPFILE     := 0o20000000
+
+pub const F_GETFL       := 3
+pub const F_SETFL       := 4

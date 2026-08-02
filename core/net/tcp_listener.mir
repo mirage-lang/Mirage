@@ -1,0 +1,27 @@
+pub type Tcp_Listener = struct {
+    socket: Socket = nil
+}
+
+impl Tcp_Listener {
+    pub fn accept(self) -> (Tcp_Client, Net_Error) {
+        const socket := try self.socket.accept()
+        return_ok {
+            .socket = socket,
+        }
+    }
+
+    pub fn close(self) -> IO_Error {
+        return self.socket.close()
+    }
+
+    pub fn set_nonblocking(self, nonblocking: bool) -> ?IO_Error {
+        return self.socket.set_nonblocking(nonblocking)
+    }
+
+    pub fn destroy(self) {
+        if self.socket != nil {
+            self.socket.destroy()
+            self.socket = nil
+        }
+    }
+}

@@ -1,0 +1,67 @@
+import("runtime")
+import("core/io")
+
+pub type Net_Error = error(IO_Error_Kind | Allocator_Error_Kind)
+
+pub type Socket = trait(Stream, Destructable) {
+    fn close(self) -> ?IO_Error
+    fn set_nonblocking(self, nonblocking: bool) -> ?IO_Error
+    fn finish_connect(self) -> (bool, ?IO_Error)
+    fn accept(self) -> (Socket, ?Net_Error)
+}
+
+pub fn connect(address: []u8, port: u16) -> (Tcp_Client, Net_Error) {
+    const socket := try _tcp_connect(address, port, false)
+    return_ok {
+        .socket = socket
+    }
+}
+
+pub fn connect_nonblocking(address: []u8, port: u16) -> (Tcp_Client, Net_Error) {
+    const socket := try _tcp_connect(address, port, true)
+    return_ok {
+        .socket = socket
+    }
+}
+
+pub fn listen(address: []u8, port: u16, backlog: i32 = 128) -> (Tcp_Listener, Net_Error) {
+    const socket := try _tcp_listen(address, port, backlog)
+    return_ok {
+        .socket = socket
+    }
+}
+
+pub fn try_parse_ipv4(address: []u8) -> (u32, bool) {
+    mut result: u32 = 0
+    mut octet: u32 = 0
+    mut octet_count: usize = 0
+    mut octet_digits: i32 = 0
+
+    for c in address {
+        if c >= '0' && c <= '9' {
+            octet = octet * 10 + cast(c - '0', u32)
+            octet_digits++
+
+            if octet_digits > 3 || octet > 255 {
+                return 0, false
+            }
+        } else if c == '.' {
+            if octet_digits == 0 || octet_count >= 3 {
+                return 0, false
+            }
+
+            result |= octet << cast(octet_count * 8, u32)
+            octet = 0
+            octet_digits = 0
+            octet_count++
+        } else {
+            return 0, false
+        }
+    }
+
+    if octet_digits == 0 || octet_count != 3 {
+        return 0, false
+    }
+
+    return result | (octet << 24), true
+}

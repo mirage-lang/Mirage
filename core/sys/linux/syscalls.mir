@@ -3,8 +3,16 @@ const sys_write: i64      = 1
 const sys_open: i64       = 2
 const sys_close: i64      = 3
 const sys_lseek: i64      = 8
+const sys_socket: i64     = 41
+const sys_connect: i64    = 42
+const sys_shutdown: i64   = 48
+const sys_bind: i64       = 49
+const sys_listen: i64     = 50
+const sys_setsockopt: i64 = 54
+const sys_fcntl: i64      = 72
 const sys_exit: i64       = 60
 const sys_exit_group: i64 = 231
+const sys_accept4: i64    = 288
 
 pub fn read(fd: Fd, buf: *u8, count: usize) -> i64 {
     return asm -> rax: i64 {
@@ -53,6 +61,66 @@ pub fn lseek(fd: Fd, offset: i64, whence: i32) -> i64 {
     }
 }
 
+pub fn shutdown(fd: i32, how: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_shutdown
+        mov edi, fd
+        mov esi, how
+        syscall
+    }
+}
+
+pub fn socket(family: i32, sock_type: i32, protocol: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_socket
+        mov edi, family
+        mov esi, sock_type
+        mov edx, protocol
+        syscall
+    }
+}
+
+pub fn connect(fd: i32, addr: anyptr, addrlen: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_connect
+        mov edi, fd
+        mov rsi, addr
+        mov edx, addrlen
+        syscall
+    }
+}
+
+pub fn bind(fd: i32, addr: anyptr, addrlen: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_bind
+        mov edi, fd
+        mov rsi, addr
+        mov edx, addrlen
+        syscall
+    }
+}
+
+pub fn listen(fd: i32, backlog: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_listen
+        mov edi, fd
+        mov esi, backlog
+        syscall
+    }
+}
+
+pub fn setsockopt(fd: i32, level: i32, optname: i32, optval: anyptr, optlen: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_setsockopt
+        mov edi, fd
+        mov esi, level
+        mov edx, optname
+        mov r10, optval
+        mov r8d, optlen
+        syscall
+    }
+}
+
 @no_return
 pub fn exit(error_code: i32) {
     asm {
@@ -62,11 +130,32 @@ pub fn exit(error_code: i32) {
     }
 }
 
+pub fn fcntl(fd: i32, cmd: i32, arg: i64) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_fcntl
+        mov edi, fd
+        mov esi, cmd
+        mov rdx, arg
+        syscall
+    }
+}
+
 @no_return
 pub fn exit_group(error_code: i32) {
     asm {
         mov rax, sys_exit_group
         mov edi, error_code
+        syscall
+    }
+}
+
+pub fn accept4(fd: i32, addr: anyptr, addrlen: anyptr, flags: i32) -> i64 {
+    return asm -> rax: i64 {
+        mov rax, sys_accept4
+        mov edi, fd
+        mov rsi, addr
+        mov rdx, addrlen
+        mov r10d, flags
         syscall
     }
 }

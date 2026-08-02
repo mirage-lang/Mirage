@@ -1,0 +1,45 @@
+pub type Tcp_Client = struct {
+    socket: Socket
+}
+
+impl Tcp_Client {
+    @always_inline
+    pub fn read(self, dst: []u8) -> (usize, ?IO_Error) {
+        return self.socket.read(dst)
+    }
+
+    @always_inline
+    pub fn write(self, src: []u8) -> (usize, ?IO_Error) {
+        return self.socket.write(src)
+    }
+
+    @always_inline
+    pub fn close(self) -> IO_Error {
+        defer self.socket = nil
+        return self.socket.close()
+    }
+
+    @always_inline
+    pub fn set_nonblocking(self, nonblocking: bool) -> ?IO_Error {
+        return self.socket.set_nonblocking(nonblocking)
+    }
+
+    @always_inline
+    pub fn finish_connect(self) -> (bool, ?IO_Error) {
+        return self.socket.finish_connect()
+    }
+
+    @always_inline
+    pub fn is_open(self) -> bool {
+        return self.socket != nil
+    }
+}
+
+impl Destructable for Tcp_Client {
+    fn destroy(self) {
+        if self.socket != nil {
+            self.socket.destroy()
+            self.socket = nil
+        }
+    }
+}
