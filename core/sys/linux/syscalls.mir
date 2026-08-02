@@ -55,6 +55,7 @@ pub fn close(fd: Fd) -> i64 {
 pub fn lseek(fd: Fd, offset: i64, whence: i32) -> i64 {
     return asm -> rax: i64 {
         mov rax, sys_lseek
+        mov edi, fd
         mov rsi, offset
         mov edx, whence
         syscall

@@ -95,7 +95,7 @@ fn _tcp_connect(address: []u8, port: u16, nonblocking: bool) -> (*Linux_Socket, 
 
     result = linux.connect(fd, &addr, cast(size_of(addr), i32))
     if result < 0 {
-        const in_progress := nonblocking && -result == linux.EINPROGRESS || -result == linux.EAGAIN
+        const in_progress := nonblocking && (-result == linux.EINPROGRESS || -result == linux.EAGAIN)
 
         if !in_progress {
             linux.close(fd)
@@ -160,7 +160,7 @@ impl Socket for Linux_Socket {
         }
 
         if result == 0 {
-            return_err .Closed
+            return_err .Eof
         }
 
         return_ok cast(result, usize)
@@ -190,8 +190,8 @@ impl Socket for Linux_Socket {
 
     fn finish_connect(self) -> (bool, ?IO_Error) {
         const result := linux.connect(self.fd, &self.addr, cast(size_of(self.addr), i32))
-        if result >= 0 || -result == cast(linux.EISCONN, i64) {
-
+        if result >= 0 || -result == linux.EISCONN {
+            return_ok true
         }
 
         if -result == linux.EALREADY || -result == linux.EINPROGRESS || -result == linux.EAGAIN {

@@ -14,8 +14,11 @@ impl Tcp_Client {
     }
 
     @always_inline
-    pub fn close(self) -> IO_Error {
-        defer self.socket = nil
+    pub fn close(self) -> ?IO_Error {
+        defer {
+            self.socket.destroy()
+            self.socket = nil
+        }
         return self.socket.close()
     }
 
