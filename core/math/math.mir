@@ -4,6 +4,14 @@ pub fn max[T: type](a: T, b: T) -> T {
 }
 
 @always_inline
-pub fn abs[T: type](val: T) -> T {
-    return val < default ? -val : val
+pub fn abs[T: type](value: T) -> T {
+    return value < default ? -value : value
 }
+
+@always_inline
+pub fn clamp[T: type](value: T, min: T, max: T) -> T {
+    return value < min ? min : (value > max ? max : value)
+}
+
+pub macro ftrunc(x: f64) -> cast(cast(x, i64), f64)
+pub macro fmod(x: f64, y: f64) -> y == 0 ? 0.0 / 0.0 : x - ftrunc(x / y) * y
