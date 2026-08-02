@@ -1,0 +1,22 @@
+pub const AF_INET       := 2
+
+pub const SOCK_STREAM   := 1
+pub const SOCK_DGRAM    := 2
+
+pub const SOL_SOCKET    := 1
+pub const SO_REUSEADDR  := 2
+pub const SO_ERROR      := 4
+
+pub const SHUT_RD       := 0
+pub const SHUT_WR       := 1
+pub const SHUT_RDWR     := 2
+
+// 16 bytes, same field offsets as Linux's — verified against the emscripten sysroot.
+pub type sockaddr_in = struct(packed) {
+    sin_family: u16 = 0
+    sin_port: u16   = 0
+    sin_addr: u32   = 0
+    sin_zero: [8]u8 = {0...}
+}
+
+pub macro htons(v: u16) -> (v >> 8) | (v << 8)

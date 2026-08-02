@@ -1,0 +1,177 @@
+pub type String_Test_Error = enum(i32) { Failed = 1 }
+pub type String_Test_Result = error(String_Test_Error | String_Error)
+
+fn string_bytes_equal(actual: []u8, expected: []u8) -> bool {
+    if len(actual) != len(expected) { return false }
+    for i in ..len(actual) { if actual[i] != expected[i] { return false } }
+    return true
+}
+
+fn is_terminated(value: *String) -> bool {
+    return value.as_cstr()[value.length] == 0
+}
+
+@test
+fn new_string_is_empty_and_exposes_empty_cstr() -> String_Test_Result {
+    mut value := make_string()
+    defer value.destroy()
+    if !value.is_empty() || value.data != nil || value.length != 0 || value.capacity != 0 || len(value.as_bytes()) != 0 || value.as_cstr()[0] != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn constructors_create_terminated_strings() -> String_Test_Result {
+    mut capacity := try make_string_with_capacity(20)
+    defer capacity.destroy()
+    mut bytes := try make_string_from_bytes("mirage")
+    defer bytes.destroy()
+    mut cstr := try make_string_from_cstr(cast("compiler", *u8))
+    defer cstr.destroy()
+    if capacity.capacity < 20 || capacity.length != 0 || !is_terminated(&capacity) ||
+       !string_bytes_equal(bytes.as_bytes(), "mirage") || !is_terminated(&bytes) ||
+       !string_bytes_equal(cstr.as_bytes(), "compiler") || !is_terminated(&cstr) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn cstr_len_counts_until_first_terminator() -> String_Test_Result {
+    const bytes: [5]u8 = {'a', 'b', 0, 'c', 0}
+    if cstr_len(&bytes[0]) != 2 || cstr_len(cast("", *u8)) != 0 || cstr_len(cast("abc", *u8)) != 3 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn reserve_preserves_content_termination_and_capacity() -> String_Test_Result {
+    mut value := try make_string_from_bytes("abc")
+    defer value.destroy()
+    try value.reserve(40)
+    const capacity := value.capacity
+    const data := value.data
+    try value.reserve(10)
+    try value.reserve(capacity)
+    if value.capacity != capacity || value.data != data || !string_bytes_equal(value.as_bytes(), "abc") || !is_terminated(&value) { return_err .Failed }
+    return_ok
+}
+
+@test
+fn append_operations_preserve_order_and_termination() -> String_Test_Result {
+    mut value := make_string()
+    defer value.destroy()
+    try value.append_byte('a')
+    try value.append_bytes("bc")
+    try value.append_cstr(cast("de", *u8))
+    mut tail := try make_string_from_bytes("fg")
+    defer tail.destroy()
+    try value.append(tail)
+    if !string_bytes_equal(value.as_bytes(), "abcdefg") || !is_terminated(&value) { return_err .Failed }
+    return_ok
+}
+
+@test
+fn empty_appends_are_noops() -> String_Test_Result {
+    mut value := make_string()
+    defer value.destroy()
+    try value.append_bytes("")
+    try value.append_cstr(cast("", *u8))
+    if value.data != nil || value.length != 0 || value.capacity != 0 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn repeated_append_grows_and_preserves_all_bytes() -> String_Test_Result {
+    mut value := make_string()
+    defer value.destroy()
+    for i in ..1000 { try value.append_byte(cast('a' + cast(i % 26, u8), u8)) }
+    if value.length != 1000 || value.capacity < 1000 || !is_terminated(&value) { return_err .Failed }
+    for i in ..1000 { if value.data[i] != cast('a' + cast(i % 26, u8), u8) { return_err .Failed } }
+    return_ok
+}
+
+@test
+fn clone_has_equal_but_independent_storage() -> String_Test_Result {
+    mut original := try make_string_from_bytes("value")
+    defer original.destroy()
+    mut copy := try original.clone()
+    defer copy.destroy()
+    if !original.equals(copy) || original.data == copy.data || string_hash(original) != string_hash(copy) { return_err .Failed }
+    try copy.append_byte('!')
+    if original.equals(copy) || !string_bytes_equal(original.as_bytes(), "value") || !string_bytes_equal(copy.as_bytes(), "value!") { return_err .Failed }
+    return_ok
+}
+
+@test
+fn clear_retains_storage_and_allows_reuse() -> String_Test_Result {
+    mut value := try make_string_from_bytes("old")
+    defer value.destroy()
+    const data := value.data
+    const capacity := value.capacity
+    value.clear()
+    if !value.is_empty() || value.data != data || value.capacity != capacity || value.as_cstr()[0] != 0 { return_err .Failed }
+    try value.append_bytes("new")
+    if !string_bytes_equal(value.as_bytes(), "new") || !is_terminated(&value) { return_err .Failed }
+    return_ok
+}
+
+@test
+fn destroy_resets_owned_state() -> String_Test_Result {
+    mut value := try make_string_from_bytes("owned")
+    value.destroy()
+    if value.data != nil || value.length != 0 || value.capacity != 0 || !value.is_empty() || value.as_cstr()[0] != 0 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn prefix_and_suffix_functions_cover_boundaries() -> String_Test_Result {
+    if !starts_with("mirage", "") || !starts_with("mirage", "mir") || !starts_with("mirage", "mirage") || starts_with("mirage", "mirages") || starts_with("mirage", "ira") ||
+       !ends_with("mirage", "") || !ends_with("mirage", "age") || !ends_with("mirage", "mirage") || ends_with("mirage", "xmirage") || ends_with("mirage", "rag") {
+        return_err .Failed
+    }
+    mut value := try make_string_from_bytes("mirage")
+    defer value.destroy()
+    if !value.starts_with("mir") || !value.ends_with("age") || value.starts_with("age") || value.ends_with("mir") { return_err .Failed }
+    return_ok
+}
+
+@test
+fn equality_and_hash_obey_string_content() -> String_Test_Result {
+    mut a := try make_string_from_bytes("same")
+    defer a.destroy()
+    mut b := try make_string_from_bytes("same")
+    defer b.destroy()
+    mut c := try make_string_from_bytes("different")
+    defer c.destroy()
+    mut empty_a := make_string()
+    defer empty_a.destroy()
+    mut empty_b := try make_string_with_capacity(4)
+    defer empty_b.destroy()
+    if !string_eq(a, b) || string_eq(a, c) || !a.equals(b) || string_hash(a) != string_hash(b) || !string_eq(empty_a, empty_b) { return_err .Failed }
+    return_ok
+}
+
+@test
+fn allocation_failures_leave_strings_unchanged() -> String_Test_Result {
+    mut value := make_string(nil_allocator())
+    defer value.destroy()
+    const reserve_err := value.reserve(1)
+    const append_err := value.append_byte('x')
+    if !reserve_err || !append_err || value.data != nil || value.length != 0 || value.capacity != 0 { return_err .Failed }
+    const _, capacity_err := make_string_with_capacity(1, nil_allocator())
+    const _, bytes_err := make_string_from_bytes("x", nil_allocator())
+    const _, cstr_err := make_string_from_cstr(cast("x", *u8), nil_allocator())
+    if !capacity_err || !bytes_err || !cstr_err { return_err .Failed }
+    return_ok
+}
+
+@test
+fn impossible_reserve_reports_capacity_overflow() -> String_Test_Result {
+    mut value := make_string()
+    defer value.destroy()
+    const maximum := ~cast(0, usize)
+    const err := value.reserve(maximum)
+    if !err || value.data != nil || value.length != 0 || value.capacity != 0 { return_err .Failed }
+    return_ok
+}

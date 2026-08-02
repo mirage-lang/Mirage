@@ -1,0 +1,249 @@
+#import("core/mem") as mem
+
+const DEFAULT_CAPACITY: usize = 64
+const MAX_USIZE := ~cast(0, usize)
+
+pub type Byte_Buffer_Error = error(Allocator_Error | Byte_Buffer_Error_Kind)
+pub type Byte_Buffer_Error_Kind = enum {
+    Capacity_Overflow
+    Out_Of_Range
+    Invalid_Argument
+}
+
+pub type Byte_Buffer = struct {
+    allocator: Allocator
+    data: *u8 = nil
+    length: usize = 0
+    capacity: usize = 0
+}
+
+pub fn make_byte_buffer(allocator := heap_allocator()) -> Byte_Buffer {
+    return {
+        .allocator = allocator,
+    }
+}
+
+pub fn make_byte_buffer_with_capacity(capacity: usize, allocator := heap_allocator()) -> (Byte_Buffer, ?Byte_Buffer_Error) {
+    const buffer := make_byte_buffer(allocator)
+
+    try buffer.reserve(capacity)
+
+    return_ok buffer
+}
+
+impl Byte_Buffer {
+    pub fn reserve(self, minimum_capacity: usize) -> ?Byte_Buffer_Error {
+        if minimum_capacity <= self.capacity {
+            return_ok
+        }
+
+        mut capacity := self.capacity == 0 ? DEFAULT_CAPACITY : self.capacity
+        while capacity < minimum_capacity {
+            if capacity > MAX_USIZE / 2 {
+                return_err .Capacity_Overflow
+            }
+
+            capacity *= 2
+        }
+
+        self.data = try self.allocator.realloc(self.data, capacity)
+        self.capacity = capacity
+
+        return_ok
+    }
+
+    pub fn align(self, alignment: usize, fill: u8 = 0) -> ?Byte_Buffer_Error {
+        if alignment == 0 || (alignment & (alignment - 1)) != 0 {
+            return_err .Invalid_Argument
+        }
+
+        const mask := alignment - 1
+        if self.length > MAX_USIZE - mask {
+            return_err .Capacity_Overflow
+        }
+
+        const aligned_length := (self.length + mask) & ~mask
+    
+        try self.ensure_space(aligned_length - self.length)
+        while self.length < aligned_length {
+            self.data[self.length++] = fill
+        }
+
+        return_ok
+    }
+
+    @always_inline
+    fn put_raw(self, src: anyptr, n: usize) -> Byte_Buffer_Error {
+        if n == 0 {
+            return_ok
+        }
+
+        try self.ensure_space(n)
+
+        mem.copy(&self.data[self.length], src, n)
+        self.length += n
+
+        return_ok
+    }
+
+    pub fn put_bytes(self, bytes: []u8) -> ?Byte_Buffer_Error {
+        return self.put_raw(bytes, len(bytes))
+    }
+
+    pub fn put_zeroes(self, count: usize) -> ?Byte_Buffer_Error {
+        if count == 0 {
+            return_ok
+        }
+
+        try self.ensure_space(count)
+
+        for i in ..count {
+            self.data[self.length + i] = 0
+        }
+
+        self.length += count
+
+        return_ok
+    }
+
+    pub fn put_u8(self, value: u8) -> ?Byte_Buffer_Error {
+        try self.ensure_space(1)
+
+        self.data[self.length++] = value
+
+        return_ok
+    }
+
+    pub fn put_u16(self, value: u16) -> ?Byte_Buffer_Error {
+        return self.put_raw(&value, size_of(u16))
+    }
+
+    pub fn put_u16_le(self, value: u16) -> ?Byte_Buffer_Error {
+        try self.put_u8(cast(value, u8))
+        try self.put_u8(cast(value >> 8, u8))
+        return_ok
+    }
+
+    pub fn put_u32(self, value: u32) -> ?Byte_Buffer_Error {
+        return self.put_raw(&value, size_of(u32))
+    }
+
+    pub fn put_u32_le(self, value: u32) -> ?Byte_Buffer_Error {
+        for shift in ..size_of(u32) {
+            try self.put_u8(cast(value >> cast(shift * 8, u32), u8))
+        }
+        return_ok
+    }
+
+    pub fn put_u64(self, value: u64) -> ?Byte_Buffer_Error {
+        return self.put_raw(&value, size_of(u64))
+    }
+    
+    pub fn put_u64_le(self, value: u64) -> ?Byte_Buffer_Error {
+        for shift in ..size_of(u64) {
+            try self.put_u8(cast(value >> cast(shift * 8, u64), u8))
+        }
+        return_ok
+    }
+
+    pub fn patch_u8(self, offset: usize, value: u8) -> ?Byte_Buffer_Error {
+        if offset >= self.length {
+            return_err .Out_Of_Range
+        }
+
+        self.data[offset] = value
+
+        return_ok
+    }
+
+    pub fn patch_u16(self, offset: usize, value: u16) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u16) {
+            return_err .Out_Of_Range
+        }
+
+        mem.copy(&self.data[offset], &value, size_of(u16))
+
+        return_ok
+    }
+
+    pub fn patch_u16_le(self, offset: usize, value: u16) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u16) {
+            return_err .Out_Of_Range
+        }
+
+        self.data[offset] = cast(value, u8)
+        self.data[offset + 1] = cast(value >> 8, u8)
+
+        return_ok
+    }
+
+    pub fn patch_u32(self, offset: usize, value: u32) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u32) {
+            return_err .Out_Of_Range
+        }
+
+        mem.copy(&self.data[offset], &value, size_of(u32))
+
+        return_ok
+    }
+
+    pub fn patch_u32_le(self, offset: usize, value: u32) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u32) {
+            return_err .Out_Of_Range
+        }
+
+        for i in ..size_of(u32) {
+            self.data[offset + i] = cast(value >> cast(i * 8, u32), u8)
+        }
+
+        return_ok
+    }
+
+    pub fn patch_u64(self, offset: usize, value: u64) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u64) {
+            return_err .Out_Of_Range
+        }
+
+        mem.copy(&self.data[offset], &value, size_of(u64))
+
+        return_ok
+    }
+
+    pub fn patch_u64_le(self, offset: usize, value: u64) -> ?Byte_Buffer_Error {
+        if offset > self.length || self.length - offset < size_of(u64) {
+            return_err .Out_Of_Range
+        }
+
+        for i in ..size_of(u64) {
+            self.data[offset + i] = cast(value >> cast(i * 8, u64), u8)
+        }
+
+        return_ok
+    }
+
+    pub fn as_bytes(self) -> []u8 {
+        return cast(self.data, []u8, self.length)
+    }
+
+    pub fn clear(self) {
+        self.length = 0
+    }
+
+    pub fn destroy(self) {
+        if self.data != nil {
+            self.allocator.free(self.data)
+        }
+
+        self.data = nil
+        self.length = 0
+        self.capacity = 0
+    }
+
+    fn ensure_space(self, space_required: usize) -> Byte_Buffer_Error {
+        if space_required > MAX_USIZE - self.length {
+            return_err .Capacity_Overflow
+        }
+
+        return self.reserve(self.length + space_required)
+    }
+}

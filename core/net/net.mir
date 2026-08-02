@@ -1,5 +1,4 @@
-import("runtime")
-import("core/io")
+#import("core/io")
 
 pub type Net_Error = error(IO_Error_Kind | Allocator_Error_Kind)
 

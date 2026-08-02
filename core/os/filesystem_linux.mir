@@ -1,0 +1,23 @@
+#compile_only_if(options.target_os == .Linux)
+
+#import("build/options") as options
+
+type DIR = struct {}
+
+type Dirent = struct {
+    ino: u64
+    offset: i64
+    record_length: u16
+    entry_type: u8
+    name: [256]u8
+}
+
+ext fn opendir(name: *u8) -> *DIR
+ext fn readdir(directory: *DIR) -> *Dirent
+ext fn closedir(directory: *DIR) -> i32
+ext fn realpath(path: *u8, resolved: *u8) -> *u8
+ext fn rename(old_path: *u8, new_path: *u8) -> i32
+ext fn unlink(path: *u8) -> i32
+ext fn mkstemp(template: *u8) -> i32
+ext fn close(fd: i32) -> i32
+ext fn free(ptr: anyptr)

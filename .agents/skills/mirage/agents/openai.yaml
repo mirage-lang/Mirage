@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mirage Development"
+  short_description: "Write, test, and debug Mirage code"
+  default_prompt: "Use $mirage to implement and verify this Mirage code change."

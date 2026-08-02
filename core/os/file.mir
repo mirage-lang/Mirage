@@ -1,11 +1,10 @@
-pub type File_Error = error(IO_Error_Kind | Allocator_Error_Kind)
+#import("core/io")
+
+pub type File_Error = error(Allocator_Error | IO_Error)
 
 pub type File = trait(Stream, Seekable, Destructable) {
-    // Returns the size of the file
-    fn size(self) -> (usize, IO_Error)
-
-    // Closes the file
-    fn close(self) -> IO_Error
+    fn size(self) -> (usize, ?IO_Error)
+    fn close(self) -> ?IO_Error
 }
 
 pub type File_Flags = bitset(File_Flag, u16)
@@ -30,11 +29,11 @@ pub mut stdin:  File = default
 pub mut stdout: File = default
 pub mut stderr: File = default
 
-pub fn create(name: []u8) -> (File, File_Error) {
+pub fn create(name: []u8) -> (File, ?File_Error) {
     return open(name, {.Read, .Write, .Create, .Truncate})
 }
 
-pub fn open(name: []u8, flags: File_Flags) -> (File, File_Error) {
+pub fn open(name: []u8, flags: File_Flags) -> (File, ?File_Error) {
     const file, err := _open(name, flags)
     if err {
         return_err err

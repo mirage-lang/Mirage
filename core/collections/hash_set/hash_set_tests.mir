@@ -1,0 +1,157 @@
+#import("core/collections/hash_map")
+
+pub type Hash_Set_Test_Error = enum(i32) { Failed = 1 }
+pub type Hash_Set_Test_Result = error(Hash_Set_Test_Error | Hash_Map_Error)
+
+fn set_constant_hash(_: i32) -> u64 { return 15 }
+fn set_mod_hash(value: i32) -> u64 { return cast(value < 0 ? -value : value, u64) % 10 }
+fn set_mod_equal(a: i32, b: i32) -> bool { return (a < 0 ? -a : a) % 10 == (b < 0 ? -b : b) % 10 }
+
+@test
+fn new_set_is_empty() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    if !set.is_empty() || set.count() != 0 || set.contains(1) || set.remove(1) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn insert_reports_new_and_duplicate_values() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    const first := try set.insert(7)
+    const duplicate := try set.insert(7)
+    if !first || duplicate || !set.contains(7) || set.count() != 1 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn collisions_preserve_distinct_members() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32](heap_allocator(), set_constant_hash)
+    defer set.destroy()
+    for value in ..12 { const inserted := try set.insert(value); if !inserted { return_err .Failed } }
+    for value in ..12 { if !set.contains(value) { return_err .Failed } }
+    if set.count() != 12 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn remove_preserves_colliding_neighbors_and_reuses_tombstone() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32](heap_allocator(), set_constant_hash)
+    defer set.destroy()
+    try set.insert(1); try set.insert(2); try set.insert(3)
+    const capacity := set.values.capacity
+    if !set.remove(2) || set.remove(2) || set.contains(2) || !set.contains(1) || !set.contains(3) {
+        return_err .Failed
+    }
+    const inserted := try set.insert(4)
+    if !inserted || !set.contains(4) || set.count() != 3 || set.values.capacity != capacity || set.values.tombstone_count != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn reserve_allocates_power_of_two_storage_and_does_not_shrink() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    try set.reserve(17)
+    const capacity := set.values.capacity
+    const slots := set.values.slots
+    try set.reserve(4)
+    if capacity < 17 || (capacity & (capacity - 1)) != 0 || set.values.capacity != capacity || set.values.slots != slots {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn growth_rehashes_every_member() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    for value in ..300 { try set.insert(value) }
+    if set.count() != 300 || set.values.capacity <= 16 { return_err .Failed }
+    for value in ..300 { if !set.contains(value) { return_err .Failed } }
+    return_ok
+}
+
+@test
+fn iteration_returns_each_live_member_once() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32](heap_allocator(), set_constant_hash)
+    defer set.destroy()
+    try set.insert(1); try set.insert(2); try set.insert(3); try set.insert(4); set.remove(3)
+    mut cursor: usize = 0
+    mut seen := 0
+    mut count := 0
+    while true {
+        const value, found := set.next(&cursor)
+        if !found { break }
+        if value == 1 { seen |= 1 } else if value == 2 { seen |= 2 } else if value == 4 { seen |= 4 } else { return_err .Failed }
+        count++
+    }
+    const _, found_after_end := set.next(&cursor)
+    if seen != 7 || count != 3 || found_after_end || cursor != set.values.capacity { return_err .Failed }
+    return_ok
+}
+
+@test
+fn custom_hash_and_equality_define_set_identity() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32](heap_allocator(), set_mod_hash, set_mod_equal)
+    defer set.destroy()
+    const first := try set.insert(12)
+    const equivalent := try set.insert(-2)
+    if !first || equivalent || set.count() != 1 || !set.contains(22) { return_err .Failed }
+    return_ok
+}
+
+@test
+fn clear_retains_storage_and_allows_reuse() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    for value in ..32 { try set.insert(value) }
+    set.remove(4)
+    const capacity := set.values.capacity
+    const slots := set.values.slots
+    set.clear()
+    if !set.is_empty() || set.count() != 0 || set.values.tombstone_count != 0 || set.values.capacity != capacity || set.values.slots != slots {
+        return_err .Failed
+    }
+    try set.insert(99)
+    if !set.contains(99) || set.count() != 1 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn destroy_resets_owned_state() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    try set.insert(1)
+    set.destroy()
+    if set.values.slots != nil || set.values.capacity != 0 || set.values.count != 0 || set.values.tombstone_count != 0 || !set.is_empty() {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn allocator_failures_leave_set_unchanged() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32](nil_allocator())
+    defer set.destroy()
+    const _, insert_err := set.insert(1)
+    const reserve_err := set.reserve(16)
+    if !insert_err || !reserve_err || set.count() != 0 || set.values.capacity != 0 || set.values.slots != nil { return_err .Failed }
+    return_ok
+}
+
+@test
+fn impossible_reserve_reports_overflow() -> Hash_Set_Test_Result {
+    mut set := make_hash_set[i32]()
+    defer set.destroy()
+    const maximum := ~cast(0, usize)
+    const err := set.reserve(maximum)
+    if !err || set.count() != 0 || set.values.capacity != 0 || set.values.slots != nil { return_err .Failed }
+    return_ok
+}

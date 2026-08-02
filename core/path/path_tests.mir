@@ -1,0 +1,297 @@
+#compile_only_if($tests_enabled)
+
+#import("core/string")
+
+pub type Path_Test_Result = error(Path_Test_Error | Path_Error)
+pub type Path_Test_Error = enum(i32) {
+    Failed = 1
+}
+
+fn text_equal(a: []u8, b: []u8) -> bool {
+    if len(a) != len(b) {
+        return false
+    }
+
+    for i in ..len(a) {
+        if a[i] != b[i] {
+            return false
+        }
+    }
+
+    return true
+}
+
+@test
+fn separator_and_absolute_detection() -> Path_Test_Result {
+    if !is_separator('/') || is_separator('\\') || is_separator(0) {
+        return_err .Failed
+    }
+
+    if !is_absolute("/") || !is_absolute("/tmp/file") || is_absolute("") || is_absolute("tmp/file") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn trailing_separator_trimming_preserves_root() -> Path_Test_Result {
+    if !text_equal(trim_trailing_separators(""), "") ||
+       !text_equal(trim_trailing_separators("/"), "/") ||
+       !text_equal(trim_trailing_separators("////"), "/") ||
+       !text_equal(trim_trailing_separators("path///"), "path") ||
+       !text_equal(trim_trailing_separators("path"), "path") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn filename_handles_relative_absolute_and_root_paths() -> Path_Test_Result {
+    if !text_equal(filename("file.txt"), "file.txt") ||
+       !text_equal(filename("dir/file.txt"), "file.txt") ||
+       !text_equal(filename("/dir/file.txt///"), "file.txt") ||
+       !text_equal(filename("/"), "") ||
+       !text_equal(filename(""), "") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn parent_handles_relative_absolute_and_trailing_separators() -> Path_Test_Result {
+    if !text_equal(parent("file"), ".") ||
+       !text_equal(parent("dir/file"), "dir") ||
+       !text_equal(parent("dir/sub///"), "dir") ||
+       !text_equal(parent("/dir/file"), "/dir") ||
+       !text_equal(parent("/file"), "/") ||
+       !text_equal(parent("/"), "/") ||
+       !text_equal(parent(""), ".") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn extension_and_extension_matching_cover_edge_cases() -> Path_Test_Result {
+    if !text_equal(extension("archive.tar.gz"), ".gz") ||
+       !text_equal(extension("dir/file.txt/"), ".txt") ||
+       len(extension("README")) != 0 || len(extension(".hidden")) != 0 ||
+       !text_equal(extension("file."), ".") {
+        return_err .Failed
+    }
+
+    if !has_extension("file.txt", ".txt") || has_extension("file.txt", "txt") ||
+       has_extension("file.TXT", ".txt") || !has_extension("README", "") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_rejects_empty_input() -> Path_Test_Result {
+    const _, err := normalize("")
+    if !err {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_collapses_duplicate_separators_and_dot_components() -> Path_Test_Result {
+    const result := try normalize("foo//./bar///baz/")
+    defer result.destroy()
+
+    if !text_equal(result.as_bytes(), "foo/bar/baz") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_keeps_separators_after_short_components() -> Path_Test_Result {
+    const relative := try normalize("a/b/c")
+    defer relative.destroy()
+
+    const absolute := try normalize("/a/b/c")
+    defer absolute.destroy()
+
+    if !text_equal(relative.as_bytes(), "a/b/c") || !text_equal(absolute.as_bytes(), "/a/b/c") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_produces_canonical_current_and_root_paths() -> Path_Test_Result {
+    const relative := try normalize("././")
+    defer relative.destroy()
+
+    const absolute := try normalize("////./")
+    defer absolute.destroy()
+
+    if !text_equal(relative.as_bytes(), ".") || !text_equal(absolute.as_bytes(), "/") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_resolves_parent_components() -> Path_Test_Result {
+    const relative := try normalize("one/two/../three")
+    defer relative.destroy()
+    const absolute := try normalize("/one/two/../three")
+    defer absolute.destroy()
+
+    if !text_equal(relative.as_bytes(), "one/three") || !text_equal(absolute.as_bytes(), "/one/three") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn normalize_component_followed_by_parent_becomes_current_directory() -> Path_Test_Result {
+    const result := try normalize("name/..")
+    defer result.destroy()
+    if !text_equal(result.as_bytes(), ".") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn normalize_preserves_unresolved_relative_parents() -> Path_Test_Result {
+    const one := try normalize("../file")
+    defer one.destroy()
+    const two := try normalize("../../file")
+    defer two.destroy()
+
+    if !text_equal(one.as_bytes(), "../file") || !text_equal(two.as_bytes(), "../../file") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn normalize_rejects_paths_that_escape_absolute_root() -> Path_Test_Result {
+    const _, direct_err := normalize("/../file")
+    const _, nested_err := normalize("/one/../../file")
+    if !direct_err || !nested_err {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn normalize_reports_allocator_failure() -> Path_Test_Result {
+    const _, err := normalize("some/path", nil_allocator())
+    if !err {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn normalize_rejects_more_components_than_its_depth_limit() -> Path_Test_Result {
+    mut input := make_string()
+    defer input.destroy()
+    for i in ..257 {
+        if i > 0 {
+            try input.append_byte('/')
+        }
+        try input.append_bytes("component")
+    }
+
+    const _, err := normalize(input.as_bytes())
+    if !err {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn join_inserts_exactly_one_boundary_separator() -> Path_Test_Result {
+    const plain := try join("left", "right")
+    defer plain.destroy()
+
+    const trailing := try join("left/", "right")
+    defer trailing.destroy()
+
+    const empty_left := try join("", "right")
+    defer empty_left.destroy()
+
+    if !text_equal(plain.as_bytes(), "left/right") ||
+       !text_equal(trailing.as_bytes(), "left/right") ||
+       !text_equal(empty_left.as_bytes(), "right") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn join_absolute_right_side_replaces_left_side() -> Path_Test_Result {
+    const result := try join("ignored/base", "/absolute/path")
+    defer result.destroy()
+
+    if !text_equal(result.as_bytes(), "/absolute/path") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn join_handles_empty_and_separator_only_right_sides() -> Path_Test_Result {
+    const empty := try join("left", "")
+    defer empty.destroy()
+
+    const root := try join("left", "/")
+    defer root.destroy()
+
+    const both_empty := try join("", "")
+    defer both_empty.destroy()
+
+    if !text_equal(empty.as_bytes(), "left") || !text_equal(root.as_bytes(), "/") ||
+       !text_equal(both_empty.as_bytes(), "") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn join_reports_allocator_failure() -> Path_Test_Result {
+    const _, err := join("left", "right", nil_allocator())
+    if !err {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn containment_requires_a_complete_path_component_prefix() -> Path_Test_Result {
+    if !is_contained("/root", "/root") ||
+       !is_contained("/root", "/root/file") ||
+       !is_contained("/root/", "/root/child") ||
+       !is_contained("/", "/anything") ||
+       is_contained("", "/root") ||
+       is_contained("/root", "/rooted") ||
+       is_contained("/root", "/roo") ||
+       is_contained("/root/", "/root") {
+        return_err .Failed
+    }
+
+    return_ok
+}

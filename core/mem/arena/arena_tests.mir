@@ -1,0 +1,132 @@
+#compile_only_if($tests_enabled)
+
+pub type Arena_Test_Result = error(Arena_Test_Error | Arena_Error)
+pub type Arena_Test_Error = enum {
+    Failed = 1
+}
+
+@test
+fn new_arena_is_empty_and_rejects_invalid_handles() -> Arena_Test_Result {
+    mut arena := make_arena[i32]()
+    defer arena.destroy()
+
+    const _, zero_error := arena.get(0)
+    const invalid_ptr, invalid_ptr_error := arena.get_ptr(INVALID_ARENA_ID)
+    if arena.count() != 0 || arena.contains(0) || arena.contains(INVALID_ARENA_ID) ||
+       !zero_error || !invalid_ptr_error || invalid_ptr != nil {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn add_assigns_dense_stable_ids_and_preserves_values() -> Arena_Test_Result {
+    mut arena := make_arena[i32]()
+    defer arena.destroy()
+
+    const first := try arena.add(10)
+    const second := try arena.add(20)
+    const third := try arena.add(30)
+    const first_value := try arena.get(first)
+    const second_value := try arena.get(second)
+    const third_value := try arena.get(third)
+
+    if first != 0 || second != 1 || third != 2 || arena.count() != 3 ||
+       first_value != 10 || second_value != 20 || third_value != 30 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn get_ptr_and_get_unchecked_reference_live_storage() -> Arena_Test_Result {
+    mut arena := try make_arena_with_capacity[i32](2)
+    defer arena.destroy()
+
+    const id := try arena.add(7)
+    const ptr := try arena.get_ptr(id)
+    if ptr == nil || ptr.* != 7 || arena.get_unchecked(id) != ptr {
+        return_err .Failed
+    }
+
+    ptr.* = 42
+    const value := try arena.get(id)
+    if value != 42 || arena.get_unchecked(id).* != 42 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn invalid_and_out_of_range_handles_report_errors() -> Arena_Test_Result {
+    mut arena := make_arena[i32]()
+    defer arena.destroy()
+    try arena.add(5)
+
+    const _, invalid_error := arena.get(INVALID_ARENA_ID)
+    const invalid_ptr, invalid_ptr_error := arena.get_ptr(INVALID_ARENA_ID)
+    const _, past_end_error := arena.get(arena.count())
+    const past_end_ptr, past_end_ptr_error := arena.get_ptr(arena.count() + 10)
+
+    if arena.contains(INVALID_ARENA_ID) || arena.contains(arena.count()) ||
+       !invalid_error || !invalid_ptr_error || invalid_ptr != nil ||
+       !past_end_error || !past_end_ptr_error || past_end_ptr != nil {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn clear_invalidates_old_ids_retains_capacity_and_allows_reuse() -> Arena_Test_Result {
+    mut arena := try make_arena_with_capacity[i32](4)
+    defer arena.destroy()
+
+    const old_id := try arena.add(11)
+    try arena.add(22)
+    const data := arena.values.data
+    const capacity := arena.values.capacity
+
+    arena.clear()
+    const _, old_error := arena.get(old_id)
+    if arena.count() != 0 || arena.contains(old_id) || !old_error ||
+       arena.values.data != data || arena.values.capacity != capacity {
+        return_err .Failed
+    }
+
+    const reused_id := try arena.add(99)
+    const reused_value := try arena.get(reused_id)
+    if reused_id != 0 || reused_value != 99 || arena.values.data != data {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn allocator_failures_propagate_without_mutating_the_arena() -> Arena_Test_Result {
+    mut arena := make_arena[i32](nil_allocator())
+    defer arena.destroy()
+
+    const _, add_error := arena.add(1)
+    if !add_error || arena.count() != 0 || arena.values.data != nil || arena.values.capacity != 0 {
+        return_err .Failed
+    }
+
+    const failed, constructor_error := make_arena_with_capacity[i32](1, nil_allocator())
+    if !constructor_error || failed.values.data != nil || failed.values.length != 0 || failed.values.capacity != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn destroy_resets_owned_storage() -> Arena_Test_Result {
+    mut arena := try make_arena_with_capacity[i32](3)
+    try arena.add(1)
+    arena.destroy()
+
+    if arena.count() != 0 || arena.values.data != nil || arena.values.capacity != 0 ||
+       arena.contains(0) || arena.contains(INVALID_ARENA_ID) {
+        return_err .Failed
+    }
+    return_ok
+}

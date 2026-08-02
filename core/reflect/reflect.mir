@@ -1,5 +1,4 @@
-import("runtime")
-import("runtime/reflection")
+#import("runtime/reflection")
 
 pub fn size_of_type_kind(kind: Type_Kind) -> usize {
     return match kind {

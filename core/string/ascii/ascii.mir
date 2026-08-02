@@ -1,0 +1,16 @@
+pub macro is_space(c: u8) -> c == ' ' || c == '\t' || c == '\r' || c == '\n'
+
+pub fn trim(bytes: []u8) -> []u8 {
+    mut start: usize = 0
+    mut end := len(bytes)
+
+    while start < end && is_space(bytes[start]) {
+        start++
+    }
+
+    while end > start && is_space(bytes[end - 1]) {
+        end--
+    }
+
+    return bytes[start..end]
+}

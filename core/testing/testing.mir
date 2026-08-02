@@ -1,0 +1,294 @@
+ext fn write(fd: i32, buf: *u8, count: usize) -> i32
+ext fn fork() -> i32
+ext fn waitpid(pid: i32, status: *i32, options: i32) -> i32
+ext fn exit(code: i32)
+ext fn clock_gettime(clock_id: i32, tp: *Timespec) -> i32
+ext fn strsignal(sig: i32) -> *u8
+ext fn isatty(fd: i32) -> i32
+
+pub type Timespec = struct {
+    tv_sec: i64
+    tv_nsec: i64
+}
+
+const CLOCK_MONOTONIC: i32 = 1
+const STDOUT: i32 = 1
+
+const COLOR_RESET   := "\x1b[0m"
+const COLOR_BOLD    := "\x1b[1m"
+const COLOR_DIM     := "\x1b[2m"
+const COLOR_GREEN   := "\x1b[32m"
+const COLOR_RED     := "\x1b[1;31m"
+const COLOR_MAGENTA := "\x1b[1;35m"
+const COLOR_CYAN    := "\x1b[1;36m"
+
+pub type Test_Function = fn() -> bool
+
+pub type Test_Case = struct {
+    module_name: []u8
+    function_name: []u8
+    function: Test_Function
+}
+
+pub type Test_Info = struct {
+    cases: []Test_Case
+}
+
+const EXIT_FAILED: i32 = 1
+
+fn put(s: []u8) {
+    if len(s) == 0 {
+        return
+    }
+    write(STDOUT, &s[0], len(s))
+}
+
+fn put_color(enabled: bool, color: []u8) {
+    if enabled {
+        put(color)
+    }
+}
+
+fn put_uint(value: u64, width: usize) {
+    mut buf: [24]u8 = undefined
+    mut i: usize = 24
+    mut v := value
+
+    if v == 0 {
+        i = i - 1
+        buf[i] = '0'
+    }
+
+    while v > 0 {
+        i = i - 1
+        buf[i] = cast(cast(v % 10, u8) + '0', u8)
+        v = v / 10
+    }
+
+    mut pad := 24 - i
+    while pad < width {
+        put(" ")
+        pad = pad + 1
+    }
+
+    put(buf[i..24])
+}
+
+fn put_padded(s: []u8, width: usize) {
+    put(s)
+
+    mut i := len(s)
+    while i < width {
+        put(" ")
+        i = i + 1
+    }
+}
+
+fn same_text(a: []u8, b: []u8) -> bool {
+    if len(a) != len(b) {
+        return false
+    }
+
+    for i in ..len(a) {
+        if a[i] != b[i] {
+            return false
+        }
+    }
+
+    return true
+}
+
+fn now_micros() -> u64 {
+    mut ts: Timespec = default
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts)
+
+    return cast(ts.tv_sec, u64) * 1000000 + cast(ts.tv_nsec, u64) / 1000
+}
+
+type Outcome = enum(i32) {
+    Ok
+    Failed
+    Crashed
+}
+
+fn exited_normally(status: i32) -> bool {
+    return (status & 0x7f) == 0
+}
+
+fn exit_status(status: i32) -> i32 {
+    return (status >> 8) & 0xff
+}
+
+fn terminating_signal(status: i32) -> i32 {
+    return status & 0x7f
+}
+
+fn run_one(case: Test_Case) -> Outcome {
+    const pid := fork()
+    if pid < 0 {
+        return .Crashed
+    }
+    if pid == 0 {
+        const ok := case.function()
+        if ok {
+            exit(0)
+        }
+        exit(1)
+    }
+
+    mut status: i32 = 0
+
+    waitpid(pid, &status, 0)
+
+    if !exited_normally(status) {
+        return .Crashed
+    }
+
+    if exit_status(status) == 0 {
+        return .Ok
+    }
+
+    if exit_status(status) == 1 {
+        return .Failed
+    }
+
+    return .Crashed
+}
+
+fn put_signal_name(status: i32) {
+    const sig := terminating_signal(status)
+
+    const name := strsignal(sig)
+    if name == nil {
+        put("signal ")
+        put_uint(cast(sig, u64), 0)
+        return
+    }
+
+    mut n: usize = 0
+    while name[n] != 0 {
+        n = n + 1
+    }
+
+    put(cast(name, []u8, n))
+}
+
+pub fn _run_tests(tests: *Test_Info) {
+    const cases := tests.cases
+    const color := isatty(STDOUT) != 0
+
+    put_color(color, COLOR_BOLD)
+    put("running ")
+    put_uint(cast(len(cases), u64), 0)
+    if len(cases) == 1 {
+        put(" test")
+    } else {
+        put(" tests")
+    }
+    put_color(color, COLOR_RESET)
+    put("\n\n")
+
+    mut passed: u64 = 0
+    mut failed: u64 = 0
+    mut crashed: u64 = 0
+    mut name_width: usize = 0
+    for case in cases {
+        if len(case.function_name) > name_width {
+            name_width = len(case.function_name)
+        }
+    }
+
+    const suite_started := now_micros()
+
+    mut previous_module: []u8 = default
+    mut first_module := true
+
+    for case in cases {
+        if first_module || !same_text(previous_module, case.module_name) {
+            if !first_module {
+                put("\n")
+            }
+            
+            put_color(color, COLOR_CYAN)
+            put(case.module_name)
+            put_color(color, COLOR_RESET)
+            put("\n")
+            previous_module = case.module_name
+            first_module = false
+        }
+
+        const started := now_micros()
+        const outcome := run_one(case)
+        const elapsed := now_micros() - started
+
+        put("  ")
+        switch outcome {
+            .Ok: {
+                put_color(color, COLOR_GREEN)
+                put("OK       ")
+                put_color(color, COLOR_RESET)
+                passed = passed + 1
+            },
+            .Failed: {
+                put_color(color, COLOR_RED)
+                put("FAILED   ")
+                put_color(color, COLOR_RESET)
+                failed = failed + 1
+            },
+            .Crashed: {
+                put_color(color, COLOR_MAGENTA)
+                put("CRASHED  ")
+                put_color(color, COLOR_RESET)
+                crashed = crashed + 1
+            },
+        }
+
+        put_padded(case.function_name, name_width)
+        put("  ")
+        put_color(color, COLOR_DIM)
+        put_uint(elapsed, 8)
+        put(" us")
+        put_color(color, COLOR_RESET)
+        put("\n")
+    }
+
+    const suite_elapsed := now_micros() - suite_started
+
+    put_color(color, COLOR_BOLD)
+    put("\nresult: ")
+    put_color(color, COLOR_RESET)
+    put_color(color, COLOR_GREEN)
+    put_uint(passed, 0)
+    put(" passed, ")
+    put_color(color, COLOR_RESET)
+    if failed > 0 {
+        put_color(color, COLOR_RED)
+    } else {
+        put_color(color, COLOR_DIM)
+    }
+    put_uint(failed, 0)
+    put(" failed, ")
+    put_color(color, COLOR_RESET)
+    if crashed > 0 {
+        put_color(color, COLOR_MAGENTA)
+    } else {
+        put_color(color, COLOR_DIM)
+    }
+    put_uint(crashed, 0)
+    put(" crashed")
+    put_color(color, COLOR_RESET)
+    put("\n")
+    put_color(color, COLOR_DIM)
+    put("time:   ")
+    put_uint(suite_elapsed, 0)
+    put(" us")
+    put_color(color, COLOR_RESET)
+    put("\n")
+
+    if failed > 0 || crashed > 0 {
+        exit(EXIT_FAILED)
+    }
+
+    exit(0)
+}

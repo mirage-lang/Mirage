@@ -1,15 +1,13 @@
-import("runtime")
-import("runtime/reflection")
+#import("runtime/reflection")
 
-import("core/io")
-import("core/string")
+#import("core/collections/list")
+#import("core/io")
+#import("core/mem") as mem
+#import("core/os") as os
+#import("core/reflect") as reflect
+#import("core/string")
 
-const list    := import("core/list")
-const mem     := import("core/mem")
-const os      := import("core/os")
-const reflect := import("core/reflect")
-
-pub type Fmt_Error = error(Allocator_Error_Kind | Fmt_Error_Kind)
+pub type Fmt_Error = error(List_Error | String_Error |  Fmt_Error_Kind)
 pub type Fmt_Error_Kind = enum {
     Unsupported_Type
     Invalid_Format_String
@@ -17,9 +15,9 @@ pub type Fmt_Error_Kind = enum {
     Too_Many_Arguments
 }
 
-pub type Print_Error = error(Allocator_Error_Kind | Fmt_Error_Kind | IO_Error_Kind)
+pub type Print_Error = error(IO_Error | Fmt_Error)
 
-type Visited = list.List[anyptr]
+type Visited = List[anyptr]
 
 const MAX_DIGITS: usize = 64
 
@@ -31,7 +29,7 @@ fn to_char(digit: u32, uppercase: bool) -> u8 {
     return cast(digit - 10, u8) + (uppercase ? 'A' : 'a')
 }
 
-fn format_int[T: type](out: *String, value: T, base: u32, uppercase: bool, min_digits: usize) -> Allocator_Error {
+fn format_int[T: type](out: *String, value: T, base: u32, uppercase: bool, min_digits: usize) -> String_Error {
     mut n := value
     mut digits: [MAX_DIGITS]u8 = undefined
     mut count: usize = 0
@@ -70,7 +68,7 @@ fn format_int[T: type](out: *String, value: T, base: u32, uppercase: bool, min_d
     return_ok
 }
 
-fn format_bytes_as_hex(out: *String, data: anyptr, n: usize) -> Allocator_Error {
+fn format_bytes_as_hex(out: *String, data: anyptr, n: usize) -> String_Error {
     try out.append_bytes("0x")
 
     const bytes: *u8 = data
@@ -81,7 +79,7 @@ fn format_bytes_as_hex(out: *String, data: anyptr, n: usize) -> Allocator_Error 
     return_ok
 }
 
-fn format_f64(out: *String, value: f64) -> Allocator_Error {
+fn format_f64(out: *String, value: f64) -> String_Error {
     mut bits: u64 = undefined
     mem.copy(&bits, &value, size_of(f64))
 
@@ -119,7 +117,7 @@ fn format_f64(out: *String, value: f64) -> Allocator_Error {
     return_ok
 }
 
-fn format_f32(out: *String, value: f32) -> Allocator_Error {
+fn format_f32(out: *String, value: f32) -> String_Error {
     mut bits: u32 = undefined
     mem.copy(&bits, &value, size_of(f32))
 
@@ -158,11 +156,11 @@ fn format_f32(out: *String, value: f32) -> Allocator_Error {
 }
 
 @always_inline
-fn format_bool(out: *String, value: bool) -> Allocator_Error {
+fn format_bool(out: *String, value: bool) -> String_Error {
     return out.append_bytes(value ? "true" : "false")
 }
 
-fn format_ptr(out: *String, value: anyptr) -> Allocator_Error {
+fn format_ptr(out: *String, value: anyptr) -> String_Error {
     out.append_bytes("0x")
 
     return format_int(out, cast(value, usize), 16, false, size_of(anyptr) * 2)
@@ -431,7 +429,7 @@ fn format_any(out: *String, value: any) -> Fmt_Error {
     const ti: *Type_Info = cast(info, *Type_Info)
     const data := cast(value, anyptr)
 
-    mut visited := list.make_list[anyptr](out.allocator)
+    mut visited := make_list[anyptr](out.allocator)
     defer visited.destroy()
 
     try format_typed(out, ti, data, &visited)

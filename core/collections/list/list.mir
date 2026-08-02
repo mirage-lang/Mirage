@@ -1,0 +1,236 @@
+#import("core/mem") as mem
+#import("core/algorithms") as algo
+
+const DEFAULT_CAPACITY: usize = 4
+const MAX_USIZE := ~cast(0, usize)
+
+pub type List_Error = error(Allocator_Error | List_Error_Kind)
+pub type List_Error_Kind = enum {
+    Capacity_Overflow
+    Out_Of_Range
+}
+
+pub type List[T: type] = struct {
+    allocator: Allocator
+    data: *T = nil
+    length: usize = 0
+    capacity: usize = 0
+}
+
+pub fn make_list[T: type](allocator := heap_allocator()) -> List {
+    return {
+        .allocator = allocator,
+    }
+}
+
+pub fn make_list_with_capacity[T: type](initial_capacity: usize, allocator := heap_allocator()) -> (List, ?List_Error) {
+    mut list := make_list[T](allocator)
+
+    try list.reserve(initial_capacity)
+    
+    return_ok list
+}
+
+impl List[T: type] {
+    pub fn reserve(self, minimum_capacity: usize) -> ?List_Error {
+        if minimum_capacity <= self.capacity {
+            return_ok
+        }
+
+        if minimum_capacity > MAX_USIZE / size_of(T) {
+            return_err .Capacity_Overflow
+        }
+
+        self.data = try self.allocator.realloc(self.data, minimum_capacity * size_of(T))
+        self.capacity = minimum_capacity
+
+        return_ok
+    }
+
+    pub fn push(self, value: T) -> ?List_Error {
+        try self.ensure_capacity()
+
+        mem.copy(&self.data[self.length++], &value, size_of(T))
+
+        return_ok
+    }
+
+    pub fn append(self, values: []T) -> ?List_Error {
+        const n := len(values)
+        if n == 0 {
+            return_ok
+        }
+
+        try self.ensure_capacity(n)
+
+        mem.copy(&self.data[self.length], values, n * size_of(T))
+        self.length += n
+
+        return_ok
+    }
+
+    pub fn pop(self, value_out: *T = nil) -> bool {
+        if self.length == 0 {
+            return false
+        }
+
+        self.length--
+
+        if value_out != nil {
+            mem.copy(value_out, &self.data[self.length], size_of(T))
+        }
+
+        return true
+    }
+
+    pub fn insert(self, mut index: usize, elem: T) -> ?List_Error {
+        try self.ensure_capacity()
+
+        if index > self.length { 
+            index = self.length 
+        }
+
+        if index < self.length {
+            mem.move(&self.data[index + 1], &self.data[index], (self.length - index) * size_of(T))
+        }
+        
+        mem.copy(&self.data[index], &elem, size_of(T))
+        self.length++
+
+        return_ok
+    }
+
+    pub fn remove_at(self, index: usize, value_out: *T) -> bool {
+        if index >= self.length {
+            return false
+        }
+
+        if value_out != nil {
+            mem.copy(value_out, &self.data[index], size_of(T))
+        }
+
+        if self.length == 1 {
+            self.length = 0
+            return true
+        }
+
+        if index + 1 < self.length { 
+            mem.move(&self.data[index], &self.data[index + 1], (self.length - index - 1) * size_of(T))
+        }
+
+        self.length--
+
+        return true
+    }
+
+    pub fn remove_swap(self, index: usize, value_out: *T) -> bool {
+        if index >= self.length {
+            return false
+        }
+
+        if value_out != nil {
+            mem.copy(value_out, &self.data[index], size_of(T))
+        }
+
+        self.length--
+        if self.length == 0 {
+            return true
+        }
+
+        if index != self.length {
+            self.data[index] = self.data[self.length]
+        }
+
+        return true
+    }
+
+    pub fn get(self, index: usize) -> (value: T, List_Error) {
+        if index >= self.length {
+            return_err .Out_Of_Range
+        }
+
+        return_ok self.data[index]
+    }
+
+    pub fn get_ptr(self, index: usize) -> (value_ptr: *T, ok: bool) {
+        return index < self.length ? &self.data[index] : default, index < self.length 
+    }
+
+    pub fn set(self, index: usize, value: T) -> ?List_Error {
+        if index >= self.length {
+            return_err .Out_Of_Range
+        }
+
+        self.data[index] = value
+        return_ok
+    }
+
+    pub fn try_set(self, index: usize, value: T) -> bool {
+        if index >= self.length {
+            return false
+        }
+
+        self.data[index] = value
+        return true
+    }
+
+    @always_inline
+    pub fn as_slice(self) -> []T { return cast(self.data, []T, self.length) }
+
+    @always_inline
+    pub fn as_bytes(self) -> []byte { return cast(self.data, []u8, self.length * size_of(T)) }
+
+    @always_inline
+    pub fn clear(self) { self.length = 0 }
+
+    @always_inline
+    pub fn is_empty(self) -> bool { return self.length == 0 }
+
+    pub fn destroy(self) {
+        if self.data != nil {
+            self.allocator.free(self.data)
+        }
+
+        self.data = nil
+        self.length = 0
+        self.capacity = 0
+    }
+
+    @always_inline
+    pub fn sort(self, compare: algo.Comparator) {
+        algo.sort(self.data, self.length, size_of(T), compare)
+    }
+
+    @always_inline
+    pub fn contains(self, key: anyptr, eq: algo.Equal) -> bool {
+        return algo.contains(self.data, self.length, size_of(T), key, eq)
+    }
+
+    @always_inline
+    pub fn index_of(self, key: anyptr, eq: algo.Equal) -> (pos: usize, found: bool) {
+        return algo.index_of(self.data, self.length, size_of(T), key, eq)
+    }
+
+    fn ensure_capacity(self, space_required: usize = 1) -> List_Error {
+        if space_required > MAX_USIZE - self.length {
+            return_err .Capacity_Overflow
+        }
+
+        const minimum_capacity := self.length + space_required
+        if minimum_capacity <= self.capacity {
+            return_ok
+        }
+
+        mut capacity := self.capacity == 0 ? DEFAULT_CAPACITY : self.capacity
+        while capacity < minimum_capacity {
+            if capacity > MAX_USIZE / 2 {
+                capacity = minimum_capacity
+                break
+            }
+
+            capacity *= 2
+        }
+
+        return self.reserve(capacity)
+    }
+}

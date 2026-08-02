@@ -1,10 +1,13 @@
-import("runtime")
-
-const hash := import("core/hash")
-const mem := import("core/mem")
+#import("core/hash")
+#import("core/mem") as mem
 
 const DEFAULT_CAPACITY: usize = 8
-const GROWTH_FACTOR: usize = 2
+const MAX_USIZE := ~cast(0, usize)
+
+pub type String_Error = error(Allocator_Error | String_Error_Kind)
+pub type String_Error_Kind = enum {
+    Capacity_Overflow
+}
 
 pub type String = struct {
     allocator: Allocator
@@ -21,24 +24,22 @@ pub fn make_string(allocator := heap_allocator()) -> String {
     }
 }
 
-pub fn make_string_with_capacity(capacity: usize, allocator := heap_allocator()) -> (String, ?Allocator_Error) {
-    const s := make_string(allocator)
-    if capacity > 0 {
-        try s.reserve(capacity)
-    }
-    return_ok s
+pub fn make_string_with_capacity(capacity: usize, allocator := heap_allocator()) -> (String, ?String_Error) {
+    const str := make_string(allocator)
+    try str.reserve(capacity)
+    return_ok str
 }
 
-pub fn make_string_from_bytes(bytes: []u8, allocator := heap_allocator()) -> (String, ?Allocator_Error) {
-    const s := make_string(allocator)
-    try s.append_bytes(bytes)
-    return_ok s
+pub fn make_string_from_bytes(bytes: []u8, allocator := heap_allocator()) -> (String, ?String_Error) {
+    const str := make_string(allocator)
+    try str.append_bytes(bytes)
+    return_ok str
 }
 
-pub fn make_string_from_cstr(cstr: *u8, allocator := heap_allocator()) -> (String, ?Allocator_Error) {
-    const s := make_string(allocator)
-    try s.append_cstr(cstr)
-    return_ok s
+pub fn make_string_from_cstr(cstr: *u8, allocator := heap_allocator()) -> (String, ?String_Error) {
+    const str := make_string(allocator)
+    try str.append_cstr(cstr)
+    return_ok str
 }
 
 pub fn cstr_len(cstr: *u8) -> usize {
@@ -50,100 +51,56 @@ pub fn cstr_len(cstr: *u8) -> usize {
 }
 
 impl String {
-    fn reserve(self, min_capacity: usize) -> ?Allocator_Error {
-        if min_capacity <= self.capacity {
+    pub fn reserve(self, minimum_capacity: usize) -> ?String_Error {
+        if minimum_capacity <= self.capacity {
             return_ok
         }
 
-        const new_size := min_capacity + 1
-        const new_data := try self.allocator.realloc(self.data, new_size)
+        if minimum_capacity == MAX_USIZE {
+            return_err .Capacity_Overflow
+        }
 
-        self.data = new_data
-        self.capacity = min_capacity
+        self.data = try self.allocator.realloc(self.data, minimum_capacity + 1)
+        self.capacity = minimum_capacity
         self.data[self.length] = 0
 
         return_ok
     }
 
-    fn ensure_space_available(self, needed: usize) -> ?Allocator_Error {
-        if self.length + needed <= self.capacity { 
-            return_ok
-        }
+    pub fn append_byte(self, value: u8) -> ?String_Error {
+        try self.ensure_capacity(1)
 
-        mut new_capacity := self.capacity == 0 ? DEFAULT_CAPACITY : self.capacity * GROWTH_FACTOR
-        while new_capacity < self.length + needed {
-            new_capacity *= GROWTH_FACTOR
-        }
-
-        return self.reserve(new_capacity)
-    }
-
-    pub fn append_byte(self, b: u8) -> ?Allocator_Error {
-        try self.ensure_space_available(1)
-
-        self.data[self.length++] = b
+        self.data[self.length++] = value
         self.data[self.length] = 0
 
         return_ok
     }
 
-    pub fn append_bytes(self, bytes: []u8) -> ?Allocator_Error {
-        const n := len(bytes)
-        if n == 0 {
+    pub fn append_bytes(self, bytes: []u8) -> ?String_Error {
+        if len(bytes) == 0 {
             return_ok
         }
 
-        try self.ensure_space_available(n)
+        try self.ensure_capacity(len(bytes))
 
-        mem.copy(&self.data[self.length], bytes, n)
+        mem.copy(&self.data[self.length], bytes, len(bytes))
         
-        self.length += n
+        self.length += len(bytes)
         self.data[self.length] = 0
 
         return_ok
     }
 
-    pub fn append_cstr(self, cstr: *u8) -> ?Allocator_Error {
-        const n := cstr_len(cstr)
-        if n == 0 {
-            return_ok
-        }
-
-        return self.append_bytes(cast(cstr, []u8, n))
+    pub fn append_cstr(self, cstr: *u8) -> ?String_Error {
+        return self.append_bytes(cast(cstr, []u8, cstr_len(cstr)))
     }
 
-    @always_inline
-    pub fn append(self, other: String) -> ?Allocator_Error {
+    pub fn append(self, other: String) -> ?String_Error {
         return self.append_bytes(other.as_bytes())
     }
 
-    pub fn clear(self) {
-        self.length = 0
-        if self.data != nil {
-            self.data[0] = 0
-        }
-    }
-
-    pub fn destroy(self) {
-        if self.data != nil {
-            self.allocator.free(self.data)
-            self.data = nil
-            self.length = 0
-            self.capacity = 0
-        }
-    }
-
-    pub fn clone(self) -> (String, ?Allocator_Error) {
-        if self.data == nil {
-            return_ok make_string(self.allocator)
-        }
-
+    pub fn clone(self) -> (String, ?String_Error) {
         return make_string_from_bytes(self.as_bytes(), self.allocator)
-    }
-    
-    @always_inline
-    pub fn is_empty(self) -> bool {
-        return self.length == 0
     }
 
     @always_inline
@@ -156,19 +113,59 @@ impl String {
         return self.data == nil ? cast("", *u8) : self.data
     }
 
-    @always_inline
+    pub fn clear(self) {
+        self.length = 0
+        if self.data != nil {
+            self.data[0] = 0
+        }
+    }
+
+    pub fn destroy(self) {
+        if self.data != nil {
+            self.allocator.free(self.data)
+        }
+
+        self.data = nil
+        self.length = 0
+        self.capacity = 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.length == 0
+    }
+
     pub fn equals(self, other: String) -> bool {
         return string_eq(self.*, other)
     }
 
-    @always_inline
     pub fn starts_with(self, prefix: []u8) -> bool {
         return starts_with(self.as_bytes(), prefix)
     }
 
-    @always_inline
     pub fn ends_with(self, suffix: []u8) -> bool {
         return ends_with(self.as_bytes(), suffix)
+    }
+
+    fn ensure_capacity(self, space_required: usize) -> ?String_Error {
+        if space_required > MAX_USIZE - self.length {
+            return_err .Capacity_Overflow
+        }
+
+        const minimum_capacity := self.length + space_required
+        if minimum_capacity <= self.capacity {
+            return_ok
+        }
+
+        mut capacity := self.capacity == 0 ? DEFAULT_CAPACITY : self.capacity
+        while capacity < minimum_capacity {
+            if capacity > MAX_USIZE / 2 {
+                capacity = minimum_capacity
+                break
+            }
+            capacity *= 2
+        }
+
+        return self.reserve(capacity)
     }
 }
 
@@ -200,7 +197,7 @@ pub fn ends_with(bytes: []u8, suffix: []u8) -> bool {
 }
 
 pub fn string_hash(str: String) -> u64 {
-    return hash.fnv1a(hash.fnv1a_bytes(str.as_bytes()))
+    return fnv1a(fnv1a_bytes(str.as_bytes()))
 }
 
 pub fn string_eq(a: String, b: String) -> bool {

@@ -1,4 +1,8 @@
-const linux := import("core/sys/linux")
+#compile_only_if(options.target_os == .Linux)
+
+#import("core/sys/linux") as linux
+#import("build/options") as options
+#import("core/io")
 
 pub type Linux_Socket = struct {
     allocator: Allocator

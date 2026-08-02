@@ -1,0 +1,23 @@
+#import("core/collections/list")
+
+pub type Process_Error = error(List_Error | Process_Error_Kind)
+pub type Process_Error_Kind = enum {
+    No_Arguments
+    Permission_Denied
+    Resource_Unavailable
+    No_Child_Process
+    Invalid_Argument
+    Unknown
+}
+
+pub type Process_Result = struct {
+    kind: enum {
+        Exited
+        Signaled
+    }
+    code: i32
+}
+
+pub fn run(arguments: [][]u8, allocator := heap_allocator()) -> (Process_Result, Process_Error) {
+    return _run(arguments, allocator)
+}

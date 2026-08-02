@@ -1,3 +1,5 @@
+#import("core/io")
+
 pub type Tcp_Client = struct {
     socket: Socket
 }

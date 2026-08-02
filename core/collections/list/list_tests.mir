@@ -1,0 +1,395 @@
+#compile_only_if($tests_enabled)
+
+#import("core/mem") as mem
+
+pub type List_Test_Result = error(List_Test_Error | List_Error)
+pub type List_Test_Error = enum {
+    Failed = 1
+}
+
+fn seeded_list(values: []i32, capacity: usize) -> (List[i32], ?List_Error) {
+    mut list := try make_list_with_capacity[i32](capacity)
+    if len(values) > capacity {
+        list.destroy()
+        return_err .Capacity_Overflow
+    }
+    if len(values) > 0 {
+        mem.copy(list.data, values, len(values) * size_of(i32))
+    }
+    list.length = len(values)
+    return_ok list
+}
+
+fn list_equals(list: *List[i32], expected: []i32) -> bool {
+    if list.length != len(expected) {
+        return false
+    }
+    for i in ..len(expected) {
+        if list.data[i] != expected[i] {
+            return false
+        }
+    }
+    return true
+}
+
+fn compare_i32(a: anyptr, b: anyptr) -> i32 {
+    const av := cast(a, *i32).*
+    const bv := cast(b, *i32).*
+    return av < bv ? -1 : (av > bv ? 1 : 0)
+}
+
+fn equal_i32(a: anyptr, b: anyptr) -> bool {
+    return cast(a, *i32).* == cast(b, *i32).*
+}
+
+@test
+fn new_list_is_empty() -> List_Test_Result {
+    mut list := make_list[i32]()
+    defer list.destroy()
+
+    if list.data != nil || list.length != 0 || list.capacity != 0 || !list.is_empty() || len(list.as_slice()) != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn constructor_and_reserve_manage_exact_capacity() -> List_Test_Result {
+    mut list := try make_list_with_capacity[i32](3)
+    defer list.destroy()
+
+    if list.data == nil || list.length != 0 || list.capacity != 3 {
+        return_err .Failed
+    }
+    const data := list.data
+    try list.reserve(2)
+    try list.reserve(3)
+    if list.data != data || list.capacity != 3 {
+        return_err .Failed
+    }
+    try list.reserve(9)
+    if list.capacity != 9 || list.data == nil {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn reserve_preserves_existing_elements() -> List_Test_Result {
+    const initial: [3]i32 = {10, 20, 30}
+    mut list := try seeded_list(initial, 3)
+    defer list.destroy()
+
+    try list.reserve(12)
+    if list.capacity != 12 || !list_equals(&list, initial) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn reserve_reports_allocator_failure_and_overflow_without_mutation() -> List_Test_Result {
+    mut failed := make_list[i32](nil_allocator())
+    defer failed.destroy()
+    if !failed.reserve(1) || failed.data != nil || failed.capacity != 0 || failed.length != 0 {
+        return_err .Failed
+    }
+
+    mut overflow := make_list[i32]()
+    defer overflow.destroy()
+    const maximum := ~cast(0, usize)
+    if !overflow.reserve(maximum) || overflow.data != nil || overflow.capacity != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn first_push_allocates_and_appends() -> List_Test_Result {
+    mut list := make_list[i32]()
+    defer list.destroy()
+
+    try list.push(42)
+    if list.length != 1 || list.capacity < 1 || list.data[0] != 42 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn push_grows_full_storage_and_preserves_values() -> List_Test_Result {
+    const initial: [4]i32 = {1, 2, 3, 4}
+    mut list := try seeded_list(initial, 4)
+    defer list.destroy()
+
+    try list.push(5)
+    const expected: [5]i32 = {1, 2, 3, 4, 5}
+    if list.capacity < 5 || !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn append_handles_empty_and_nonempty_slices() -> List_Test_Result {
+    const initial: [2]i32 = {1, 2}
+    mut list := try seeded_list(initial, 8)
+    defer list.destroy()
+
+    const data := list.data
+    const empty: []i32 = default
+    try list.append(empty)
+    if list.data != data || list.length != 2 {
+        return_err .Failed
+    }
+
+    const tail: [3]i32 = {3, 4, 5}
+    try list.append(tail)
+    const expected: [5]i32 = {1, 2, 3, 4, 5}
+    if !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn append_grows_when_combined_length_exceeds_capacity() -> List_Test_Result {
+    const initial: [3]i32 = {1, 2, 3}
+    const tail: [3]i32 = {4, 5, 6}
+    mut list := try seeded_list(initial, 4)
+    defer list.destroy()
+
+    try list.append(tail)
+    const expected: [6]i32 = {1, 2, 3, 4, 5, 6}
+    if list.capacity < 6 || !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn pop_handles_empty_value_output_and_discard() -> List_Test_Result {
+    mut empty := make_list[i32]()
+    defer empty.destroy()
+    if empty.pop() {
+        return_err .Failed
+    }
+
+    const values: [3]i32 = {10, 20, 30}
+    mut list := try seeded_list(values, 3)
+    defer list.destroy()
+    mut removed := 0
+    if !list.pop(&removed) || removed != 30 || list.length != 2 {
+        return_err .Failed
+    }
+    if !list.pop() || list.length != 1 || list.data[0] != 10 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn insert_supports_front_middle_end_and_clamped_index() -> List_Test_Result {
+    const initial: [2]i32 = {2, 4}
+    mut list := try seeded_list(initial, 8)
+    defer list.destroy()
+
+    try list.insert(0, 1)
+    try list.insert(2, 3)
+    try list.insert(list.length, 5)
+    try list.insert(999, 6)
+    const expected: [6]i32 = {1, 2, 3, 4, 5, 6}
+    if !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn insert_grows_full_storage() -> List_Test_Result {
+    const initial: [4]i32 = {1, 2, 4, 5}
+    mut list := try seeded_list(initial, 4)
+    defer list.destroy()
+
+    try list.insert(2, 3)
+    const expected: [5]i32 = {1, 2, 3, 4, 5}
+    if list.capacity < 5 || !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn remove_at_preserves_order_and_returns_removed_values() -> List_Test_Result {
+    const values: [5]i32 = {1, 2, 3, 4, 5}
+    mut list := try seeded_list(values, 5)
+    defer list.destroy()
+
+    mut removed := 0
+    if !list.remove_at(2, &removed) || removed != 3 {
+        return_err .Failed
+    }
+    if !list.remove_at(0, nil) || !list.remove_at(list.length - 1, &removed) || removed != 5 {
+        return_err .Failed
+    }
+    const expected: [2]i32 = {2, 4}
+    if !list_equals(&list, expected) || list.remove_at(2, nil) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn remove_at_handles_single_element_list() -> List_Test_Result {
+    const values: [1]i32 = {7}
+    mut list := try seeded_list(values, 1)
+    defer list.destroy()
+    mut removed := 0
+
+    if !list.remove_at(0, &removed) || removed != 7 || !list.is_empty() {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn remove_swap_replaces_with_last_without_shifting() -> List_Test_Result {
+    const values: [4]i32 = {10, 20, 30, 40}
+    mut list := try seeded_list(values, 4)
+    defer list.destroy()
+    mut removed := 0
+
+    if !list.remove_swap(1, &removed) || removed != 20 {
+        return_err .Failed
+    }
+    const expected: [3]i32 = {10, 40, 30}
+    if !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    if !list.remove_swap(2, nil) || list.remove_swap(9, nil) || list.length != 2 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn remove_swap_handles_single_element_list() -> List_Test_Result {
+    const values: [1]i32 = {9}
+    mut list := try seeded_list(values, 1)
+    defer list.destroy()
+
+    if !list.remove_swap(0, nil) || !list.is_empty() {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn get_and_get_ptr_cover_valid_and_invalid_indices() -> List_Test_Result {
+    const values: [3]i32 = {10, 20, 30}
+    mut list := try seeded_list(values, 3)
+    defer list.destroy()
+
+    const value := try list.get(1)
+    const _, get_err := list.get(3)
+    if value != 20 || !get_err {
+        return_err .Failed
+    }
+    const ptr, found := list.get_ptr(2)
+    const missing, missing_found := list.get_ptr(3)
+    if !found || ptr == nil || ptr.* != 30 || missing_found || missing != nil {
+        return_err .Failed
+    }
+    ptr.* = 33
+    if list.data[2] != 33 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn set_and_try_set_reject_out_of_range_indices() -> List_Test_Result {
+    const values: [2]i32 = {1, 2}
+    mut list := try seeded_list(values, 2)
+    defer list.destroy()
+
+    try list.set(0, 10)
+    if !list.try_set(1, 20) || list.try_set(2, 30) || !list.set(2, 30) {
+        return_err .Failed
+    }
+    const expected: [2]i32 = {10, 20}
+    if !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn slice_and_byte_views_cover_only_live_elements() -> List_Test_Result {
+    const values: [3]i32 = {0x11223344, 0x55667788, 9}
+    mut list := try seeded_list(values, 8)
+    defer list.destroy()
+
+    const slice := list.as_slice()
+    const bytes := list.as_bytes()
+    if len(slice) != 3 || len(bytes) != 3 * size_of(i32) || slice[1] != values[1] {
+        return_err .Failed
+    }
+    slice[2] = 99
+    if list.data[2] != 99 || mem.compare(bytes, list.data, len(bytes)) != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn clear_retains_storage_and_allows_reuse() -> List_Test_Result {
+    const values: [3]i32 = {1, 2, 3}
+    mut list := try seeded_list(values, 6)
+    defer list.destroy()
+    const data := list.data
+
+    list.clear()
+    if !list.is_empty() || list.data != data || list.capacity != 6 {
+        return_err .Failed
+    }
+    try list.push(9)
+    if list.length != 1 || list.data[0] != 9 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn sort_contains_and_index_of_delegate_correctly() -> List_Test_Result {
+    const values: [6]i32 = {4, 1, 5, 2, 6, 3}
+    mut list := try seeded_list(values, 6)
+    defer list.destroy()
+
+    list.sort(compare_i32)
+    const expected: [6]i32 = {1, 2, 3, 4, 5, 6}
+    if !list_equals(&list, expected) {
+        return_err .Failed
+    }
+    const four := 4
+    const nine := 9
+    const pos, found := list.index_of(&four, equal_i32)
+    const missing_pos, missing := list.index_of(&nine, equal_i32)
+    const maximum := ~cast(0, usize)
+    if !list.contains(&four, equal_i32) || list.contains(&nine, equal_i32) || !found || pos != 3 || missing || missing_pos != maximum {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn destroy_resets_owned_state() -> List_Test_Result {
+    const values: [2]i32 = {1, 2}
+    mut list := try seeded_list(values, 4)
+    list.destroy()
+
+    if list.data != nil || list.length != 0 || list.capacity != 0 || !list.is_empty() {
+        return_err .Failed
+    }
+    return_ok
+}

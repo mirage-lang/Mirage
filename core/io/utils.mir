@@ -1,0 +1,55 @@
+#import("core/buffer")
+#import("core/mem") as mem
+
+pub fn write_all_bytes(writer: Writer, bytes: []u8) -> IO_Error {
+    mut written: usize = 0
+    while written < len(bytes) {
+        const count := try writer.write(bytes[written..])
+        if count == 0 {
+            return_err .Unknown
+        }
+
+        written += count
+    }
+
+    return_ok
+}
+
+pub fn read_all_bytes(reader: Reader, allocator := heap_allocator()) -> (Byte_Buffer, error(IO_Error | Byte_Buffer_Error)) {
+    mut buffer := make_byte_buffer(allocator)
+    mut scratch: [4096]u8 = undefined
+    while true {
+        const count, err := reader.read(scratch)
+        if err {
+            switch err {
+                .Eof: { return_ok buffer },
+                _: {
+                    buffer.destroy()
+                }
+            }
+
+            return_err err
+        }
+
+        if count == 0 {
+            return_ok buffer
+        }
+        
+        if count > len(scratch) {
+            buffer.destroy()
+            return_err .Unknown
+        }
+
+        if buffer.length > ~cast(0, usize) - count {
+            buffer.destroy()
+            return_err .Out_Of_Memory
+        }
+
+        try buffer.reserve(buffer.length + count)
+        mem.copy(&buffer.data[buffer.length], &scratch, count)
+
+        buffer.length += count
+    }
+
+    return_ok buffer
+}

@@ -1,0 +1,205 @@
+#compile_only_if(options.target_os == .Wasm32)
+
+// The wasm/emscripten Socket backend, a mirror of net_linux.mir over core/sys/wasm.
+//
+// There are no TCP sockets in a browser. Emscripten emulates the BSD socket API on top
+// of WebSockets: socket()/connect()/send()/recv() work as written here, but the peer
+// must be a WebSocket server — for a plain TCP game server that means a relay
+// (websockify, or emscripten's own websocket_to_posix_proxy) in front of it. The
+// address and port passed to connect() are the ones the relay is told to dial.
+//
+// The other consequence of that emulation is that only NON-BLOCKING use is meaningful:
+// a browser cannot block the main thread waiting for a socket, so a blocking connect
+// reports "in progress" and the caller must poll finish_connect(), which is exactly the
+// shape core/net's API already has.
+#import("core/sys/wasm") as wasm
+#import("build/options") as options
+#import("core/io")
+
+pub type Wasm_Socket = struct {
+    allocator: Allocator
+    fd: wasm.Fd
+    addr: wasm.sockaddr_in
+}
+
+@always_inline
+fn _alloc_socket(fd: wasm.Fd, addr: wasm.sockaddr_in) -> (*Wasm_Socket, Net_Error) {
+    const allocator := heap_allocator()
+    const socket: *Wasm_Socket = try allocator.alloc(size_of(Wasm_Socket))
+
+    socket.* = {
+        .allocator = allocator,
+        .fd = fd,
+        .addr = addr,
+    }
+
+    return_ok socket
+}
+
+@always_inline
+fn _map_errno_to_io_error(errno: i64) -> IO_Error {
+    return match errno {
+        wasm.EINVAL:       .Invalid_Argument,
+        wasm.ENOENT:       .Not_Exist,
+        wasm.EACCES:       .Permission_Denied,
+        wasm.EPERM:        .Permission_Denied,
+        wasm.EAGAIN:       .Would_Block,
+        wasm.EINPROGRESS:  .Would_Block,
+        wasm.EALREADY:     .Would_Block,
+        wasm.EBADF:        .Closed,
+        wasm.EPIPE:        .Closed,
+        wasm.ECONNRESET:   .Closed,
+        wasm.ECONNABORTED: .Closed,
+        wasm.ENOTCONN:     .Closed,
+        wasm.EINTR:        .Interrupted,
+
+        _: .Unknown
+    }
+}
+
+fn _make_sockaddr(address: []u8, port: u16) -> (wasm.sockaddr_in, IO_Error) {
+    const ip, ok := try_parse_ipv4(address)
+    if !ok {
+        return_err .Invalid_Argument
+    }
+
+    return_ok {
+        .sin_family = cast(wasm.AF_INET, u16),
+        .sin_port = wasm.htons(port),
+        .sin_addr = ip,
+    }
+}
+
+fn _set_nonblocking(fd: wasm.Fd, nonblocking: bool) -> ?IO_Error {
+    const flags := wasm.fcntl(fd, wasm.F_GETFL, 0)
+    if flags < 0 {
+        return_err _map_errno_to_io_error(-flags)
+    }
+
+    mut new_flags := flags
+    if nonblocking {
+        new_flags |= cast(wasm.O_NONBLOCK, i64)
+    } else {
+        new_flags &= ~cast(wasm.O_NONBLOCK, i64)
+    }
+
+    const result := wasm.fcntl(fd, wasm.F_SETFL, new_flags)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    return_ok
+}
+
+fn _tcp_connect(address: []u8, port: u16, nonblocking: bool) -> (*Wasm_Socket, Net_Error) {
+    const addr := try _make_sockaddr(address, port)
+
+    mut result := wasm.socket(wasm.AF_INET, wasm.SOCK_STREAM, 0)
+    if result < 0 {
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    const fd := cast(result, wasm.Fd)
+
+    if nonblocking {
+        const err := _set_nonblocking(fd, true)
+        if err {
+            wasm.close(fd)
+            return_err err
+        }
+    }
+
+    result = wasm.connect(fd, &addr, cast(size_of(addr), i32))
+    if result < 0 {
+        // The WebSocket handshake is always asynchronous, so emscripten reports
+        // EINPROGRESS/EAGAIN for a blocking connect too — that is not an error here,
+        // it just means finish_connect() has work left to do.
+        if -result != wasm.EINPROGRESS && -result != wasm.EAGAIN && -result != wasm.EALREADY {
+            wasm.close(fd)
+            return_err _map_errno_to_io_error(-result)
+        }
+    }
+
+    const socket, err := _alloc_socket(fd, addr)
+    defer if err {
+        wasm.close(fd)
+    }
+
+    if err {
+        return_err err
+    }
+
+    return_ok socket
+}
+
+// Listening sockets have no meaning in a page: nothing can dial in to a browser tab.
+// The call is kept so core/net's API is whole on this target, and reports the same
+// error a kernel would for an operation it cannot perform.
+fn _tcp_listen(address: []u8, port: u16, backlog: i32) -> (*Wasm_Socket, Net_Error) {
+    return_err .Unsupported
+}
+
+impl Socket for Wasm_Socket {
+    fn read(self, dst: []u8) -> (usize, ?IO_Error) {
+        const result := wasm.read(self.fd, dst, len(dst))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        if result == 0 {
+            return_err .Eof
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn write(self, src: []u8) -> (usize, ?IO_Error) {
+        const result := wasm.write(self.fd, src, len(src))
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok cast(result, usize)
+    }
+
+    fn close(self) -> ?IO_Error {
+        const result := wasm.close(self.fd)
+        if result < 0 {
+            return_err _map_errno_to_io_error(-result)
+        }
+
+        return_ok
+    }
+
+    fn set_nonblocking(self, nonblocking: bool) -> ?IO_Error {
+        return _set_nonblocking(self.fd, nonblocking)
+    }
+
+    fn finish_connect(self) -> (bool, ?IO_Error) {
+        const result := wasm.connect(self.fd, &self.addr, cast(size_of(self.addr), i32))
+        if result >= 0 || -result == wasm.EISCONN {
+            return_ok true
+        }
+
+        if -result == wasm.EALREADY || -result == wasm.EINPROGRESS || -result == wasm.EAGAIN {
+            return_ok false
+        }
+
+        return_err _map_errno_to_io_error(-result)
+    }
+
+    fn accept(self) -> (Socket, ?Net_Error) {
+        return_err .Unsupported
+    }
+
+    fn destroy(self) {
+        if self.fd == -1 {
+            return
+        }
+
+        wasm.close(self.fd)
+
+        self.fd = -1
+        self.allocator.free(self)
+    }
+}

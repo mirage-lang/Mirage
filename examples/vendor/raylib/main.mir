@@ -1,4 +1,4 @@
-import("vendor/raylib")
+#import("vendor/raylib")
 
 pub fn main() {
     InitWindow(800, 450, "raylib example - basic window");

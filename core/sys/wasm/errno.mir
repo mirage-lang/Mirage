@@ -1,0 +1,28 @@
+// Emscripten's errno numbering, which is WASI's — NOT Linux's. The two disagree on
+// almost every value that matters here (EACCES is 2 rather than 13, EAGAIN 6 rather
+// than 11, ENOENT 44 rather than 2), which is the single most likely thing to go
+// unnoticed when porting a Linux backend, since the names are identical.
+//
+// Only the codes core/os and core/net actually map are listed. Read out of the
+// emscripten sysroot rather than transcribed from a table.
+pub const EPERM         :i64 = 63
+pub const ENOENT        :i64 = 44
+pub const EINTR         :i64 = 27
+pub const EIO           :i64 = 29
+pub const EBADF         :i64 = 8
+pub const EAGAIN        :i64 = 6
+pub const ENOMEM        :i64 = 48
+pub const EACCES        :i64 = 2
+pub const EFAULT        :i64 = 21
+pub const EEXIST        :i64 = 20
+pub const EINVAL        :i64 = 28
+pub const EPIPE         :i64 = 64
+
+pub const EWOULDBLOCK       := EAGAIN
+
+pub const ECONNABORTED  :i64 = 13
+pub const ECONNRESET    :i64 = 15
+pub const EISCONN       :i64 = 30
+pub const ENOTCONN      :i64 = 53
+pub const EALREADY      :i64 = 7
+pub const EINPROGRESS   :i64 = 26

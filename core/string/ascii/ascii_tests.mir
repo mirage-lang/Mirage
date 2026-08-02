@@ -1,0 +1,54 @@
+pub type Ascii_Test_Error = enum(i32) { Failed = 1 }
+pub type Ascii_Test_Result = error(Ascii_Test_Error)
+
+fn ascii_bytes_equal(a: []u8, b: []u8) -> bool {
+    if len(a) != len(b) { return false }
+    for i in ..len(a) { if a[i] != b[i] { return false } }
+    return true
+}
+
+@test
+fn is_space_accepts_exact_ascii_whitespace_set() -> Ascii_Test_Result {
+    if !is_space(' ') || !is_space('\t') || !is_space('\r') || !is_space('\n') ||
+       is_space(0x0b) || is_space(0x0c) || is_space('a') || is_space(0) || is_space(0x80) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn trim_handles_empty_and_all_whitespace_inputs() -> Ascii_Test_Result {
+    if !ascii_bytes_equal(trim(""), "") || !ascii_bytes_equal(trim(" \t\r\n"), "") { return_err .Failed }
+    return_ok
+}
+
+@test
+fn trim_removes_leading_and_trailing_whitespace() -> Ascii_Test_Result {
+    if !ascii_bytes_equal(trim("  mirage\t\r\n"), "mirage") ||
+       !ascii_bytes_equal(trim(" leading"), "leading") ||
+       !ascii_bytes_equal(trim("trailing\n"), "trailing") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn trim_preserves_interior_and_non_whitespace_bytes() -> Ascii_Test_Result {
+    const non_space_controls: [3]u8 = {0x0b, 'a', 0x0c}
+    if !ascii_bytes_equal(trim("a b\tc\nd"), "a b\tc\nd") ||
+       !ascii_bytes_equal(trim(non_space_controls), non_space_controls) ||
+       !ascii_bytes_equal(trim("already-clean"), "already-clean") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn trim_returns_a_live_subslice() -> Ascii_Test_Result {
+    mut bytes: [5]u8 = {' ', 'a', 'b', ' ', 0}
+    const view := trim(bytes[..4])
+    if len(view) != 2 || view[0] != 'a' || view[1] != 'b' { return_err .Failed }
+    view[0] = 'x'
+    if bytes[1] != 'x' { return_err .Failed }
+    return_ok
+}

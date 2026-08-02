@@ -1,0 +1,415 @@
+#compile_only_if($tests_enabled)
+
+#import("core/mem") as mem
+
+pub type Byte_Buffer_Test_Result = error(Byte_Buffer_Test_Error | Byte_Buffer_Error)
+pub type Byte_Buffer_Test_Error = enum {
+    Failed = 1
+}
+
+fn bytes_equal(actual: []u8, expected: []u8) -> bool {
+    if len(actual) != len(expected) {
+        return false
+    }
+
+    for i in ..len(actual) {
+        if actual[i] != expected[i] {
+            return false
+        }
+    }
+
+    return true
+}
+
+@test
+fn new_buffer_is_empty() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    if buffer.data != nil || buffer.length != 0 || buffer.capacity != 0 || len(buffer.as_bytes()) != 0 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn constructor_reserves_requested_capacity() -> Byte_Buffer_Test_Result {
+    mut buffer := try make_byte_buffer_with_capacity(65)
+
+    defer buffer.destroy()
+
+    if buffer.data == nil || buffer.length != 0 || buffer.capacity < 65 {
+        return_err .Failed
+    }
+
+    if (buffer.capacity & (buffer.capacity - 1)) != 0 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn reserve_preserves_contents_and_never_shrinks() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    try buffer.put_bytes("mirage")
+
+    const capacity := buffer.capacity
+    try buffer.reserve(capacity * 2)
+    if buffer.capacity < capacity * 2 || !bytes_equal(buffer.as_bytes(), "mirage") {
+        return_err .Failed
+    }
+
+    const grown_capacity := buffer.capacity
+
+    try buffer.reserve(1)
+    if buffer.capacity != grown_capacity || !bytes_equal(buffer.as_bytes(), "mirage") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn reserve_with_sufficient_capacity_does_not_allocate() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    try buffer.reserve(64)
+
+    buffer.allocator = nil_allocator()
+
+    // An already-satisfied reservation must be a no-op and must not consult the allocator.
+    const smaller_err := buffer.reserve(32)
+    const equal_err := buffer.reserve(64)
+    if smaller_err || equal_err || buffer.capacity != 64 || buffer.data == nil {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn put_bytes_zeroes_and_u8_append_in_order() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    try buffer.put_bytes("ab")
+    try buffer.put_zeroes(3)
+    try buffer.put_u8('z')
+
+    const expected: [6]u8 = {'a', 'b', 0, 0, 0, 'z'}
+    if !bytes_equal(buffer.as_bytes(), expected) {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn empty_appends_do_not_change_length() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    try buffer.put_bytes("")
+    try buffer.put_zeroes(0)
+
+    if buffer.data != nil || buffer.length != 0 || buffer.capacity != 0 {
+        return_err .Failed
+    }
+    
+    return_ok
+}
+
+@test
+fn growth_preserves_all_appended_bytes() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    for i in ..1000 {
+        try buffer.put_u8(cast(i % 251, u8))
+    }
+
+    if buffer.length != 1000 || buffer.capacity < 1000 {
+        return_err .Failed
+    }
+
+    for i in ..1000 {
+        if buffer.data[i] != cast(i % 251, u8) {
+            return_err .Failed
+        }
+    }
+
+    return_ok
+}
+
+@test
+fn little_endian_integer_writes_have_exact_layout() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    try buffer.put_u16_le(0x1234)
+    try buffer.put_u32_le(0x89abcdef)
+    try buffer.put_u64_le(0x0123456789abcdef)
+
+    const expected: [14]u8 = {
+        0x34, 0x12,
+        0xef, 0xcd, 0xab, 0x89,
+        0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01,
+    }
+
+    if !bytes_equal(buffer.as_bytes(), expected) {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn native_integer_writes_append_the_native_representation() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+
+    defer buffer.destroy()
+
+    const a: u16 = 0x1234
+    const b: u32 = 0x89abcdef
+    const c: u64 = 0x0123456789abcdef
+
+    try buffer.put_u16(a)
+    try buffer.put_u32(b)
+    try buffer.put_u64(c)
+
+    mut expected: [14]u8 = undefined
+
+    mem.copy(&expected[0], &a, size_of(u16))
+    mem.copy(&expected[2], &b, size_of(u32))
+    mem.copy(&expected[6], &c, size_of(u64))
+
+    if !bytes_equal(buffer.as_bytes(), expected) {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn alignment_adds_only_required_fill_bytes() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+
+    try buffer.put_bytes("abc")
+    try buffer.align(8, 0xcc)
+    if buffer.length != 8 {
+        return_err .Failed
+    }
+    for i in 3..8 {
+        if buffer.data[i] != 0xcc {
+            return_err .Failed
+        }
+    }
+
+    try buffer.align(8, 0xdd)
+    if buffer.length != 8 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn alignment_rejects_zero_and_non_power_of_two_values() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_u8(7)
+
+    const zero_err := buffer.align(0)
+    const three_err := buffer.align(3)
+    if !zero_err || !three_err || buffer.length != 1 || buffer.data[0] != 7 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn patch_u8_changes_only_the_target_byte() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_bytes("abc")
+
+    try buffer.patch_u8(1, 'x')
+    if !bytes_equal(buffer.as_bytes(), "axc") {
+        return_err .Failed
+    }
+    if !buffer.patch_u8(3, 0) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn native_integer_patches_write_exact_widths() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_zeroes(14)
+
+    const a: u16 = 0x1234
+    const b: u32 = 0x89abcdef
+    const c: u64 = 0x0123456789abcdef
+    try buffer.patch_u16(0, a)
+    try buffer.patch_u32(2, b)
+    try buffer.patch_u64(6, c)
+
+    mut expected: [14]u8 = undefined
+    mem.copy(&expected[0], &a, size_of(u16))
+    mem.copy(&expected[2], &b, size_of(u32))
+    mem.copy(&expected[6], &c, size_of(u64))
+    if !bytes_equal(buffer.as_bytes(), expected) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn little_endian_patches_accept_exact_sized_ranges() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+
+    try buffer.put_zeroes(14)
+    try buffer.patch_u16_le(0, 0x1234)
+    try buffer.patch_u32_le(2, 0x89abcdef)
+    try buffer.patch_u64_le(6, 0x0123456789abcdef)
+
+    const expected: [14]u8 = {
+        0x34, 0x12,
+        0xef, 0xcd, 0xab, 0x89,
+        0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01,
+    }
+    if !bytes_equal(buffer.as_bytes(), expected) {
+        return_err .Failed
+    }
+
+    mut exact := make_byte_buffer()
+    defer exact.destroy()
+    try exact.put_zeroes(2)
+    try exact.patch_u16_le(0, 0xbeef)
+    if exact.data[0] != 0xef || exact.data[1] != 0xbe {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn patches_reject_every_out_of_range_boundary() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_zeroes(8)
+
+    if !buffer.patch_u8(8, 1) ||
+       !buffer.patch_u16(7, 1) || !buffer.patch_u16_le(7, 1) ||
+       !buffer.patch_u32(5, 1) || !buffer.patch_u32_le(5, 1) ||
+       !buffer.patch_u64(1, 1) || !buffer.patch_u64_le(1, 1) {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn as_bytes_is_a_live_view_of_initialized_data() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_bytes("abc")
+
+    const view := buffer.as_bytes()
+    view[1] = 'x'
+    if len(view) != 3 || !bytes_equal(buffer.as_bytes(), "axc") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn clear_retains_storage_and_allows_reuse() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+    try buffer.put_bytes("old data")
+    const data := buffer.data
+    const capacity := buffer.capacity
+
+    buffer.clear()
+    if buffer.length != 0 || buffer.data != data || buffer.capacity != capacity {
+        return_err .Failed
+    }
+    try buffer.put_bytes("new")
+    if !bytes_equal(buffer.as_bytes(), "new") {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn destroy_resets_all_owned_state() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    try buffer.put_bytes("data")
+    buffer.destroy()
+
+    if buffer.data != nil || buffer.length != 0 || buffer.capacity != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn allocator_failures_leave_buffer_unchanged() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer(nil_allocator())
+    defer buffer.destroy()
+
+    const reserve_err := buffer.reserve(1)
+    const put_err := buffer.put_u8(1)
+    if !reserve_err || !put_err || buffer.data != nil || buffer.length != 0 || buffer.capacity != 0 {
+        return_err .Failed
+    }
+
+    const _, constructor_err := make_byte_buffer_with_capacity(1, nil_allocator())
+    if !constructor_err {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn impossible_growth_reports_overflow_without_mutation() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+
+    const maximum := ~cast(0, usize)
+    const err := buffer.put_zeroes(maximum)
+    if !err || buffer.data != nil || buffer.length != 0 || buffer.capacity != 0 {
+        return_err .Failed
+    }
+    return_ok
+}
+
+@test
+fn alignment_overflow_is_reported_before_mutation() -> Byte_Buffer_Test_Result {
+    mut buffer := make_byte_buffer()
+    defer buffer.destroy()
+
+    const maximum := ~cast(0, usize)
+    buffer.length = maximum
+    const err := buffer.align(8)
+    buffer.length = 0
+
+    if !err || buffer.data != nil || buffer.capacity != 0 {
+        return_err .Failed
+    }
+    return_ok
+}

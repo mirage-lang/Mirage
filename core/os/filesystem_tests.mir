@@ -1,0 +1,203 @@
+#compile_only_if($tests_enabled && options.target_os == .Linux)
+
+#import("build/options") as options
+
+#import("core/buffer")
+#import("core/collections/list")
+#import("core/io")
+#import("core/string")
+
+pub type Filesystem_Test_Result = error(Filesystem_Test_Error | File_Error | Byte_Buffer_Error | IO_Error | String_Error | List_Error)
+pub type Filesystem_Test_Error = enum {
+    Failed = 1
+}
+
+fn filesystem_bytes_equal(actual: []u8, expected: []u8) -> bool {
+    if len(actual) != len(expected) {
+        return false
+    }
+    
+    for i in ..len(actual) {
+        if actual[i] != expected[i] {
+            return false
+        }
+    }
+
+    return true
+}
+
+fn filesystem_basename(path: []u8) -> []u8 {
+    mut start: usize = 0
+    for i in ..len(path) {
+        if path[i] == '/' {
+            start = i + 1
+        }
+    }
+
+    return path[start..]
+}
+
+@test
+fn temporary_file_is_unique_empty_and_canonicalizable() -> Filesystem_Test_Result {
+    mut first := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(first.as_cstr())
+        first.destroy()
+    }
+
+    mut second := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(second.as_cstr())
+        second.destroy()
+    }
+
+    mut bytes := try read_file(first.as_bytes())
+    defer bytes.destroy()
+
+    mut resolved := try canonicalize(first.as_bytes())
+    defer resolved.destroy()
+
+    if first.is_empty() || second.is_empty() || first.equals(second) || bytes.length != 0 || !filesystem_bytes_equal(resolved.as_bytes(), first.as_bytes()) {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn write_and_read_file_preserve_binary_contents_and_truncate() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(path.as_cstr())
+        path.destroy()
+    }
+
+    const initial: [7]u8 = {'m', 'i', 'r', 0, 'a', 'g', 'e'}
+
+    try write_file(path.as_bytes(), initial)
+
+    mut first := try read_file(path.as_bytes())
+    defer first.destroy()
+
+    if !filesystem_bytes_equal(first.as_bytes(), initial) {
+        return_err .Failed
+    }
+
+    try write_file(path.as_bytes(), "new")
+
+    mut second := try read_file(path.as_bytes())
+    defer second.destroy()
+
+    if !filesystem_bytes_equal(second.as_bytes(), "new") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn write_file_creates_a_missing_path_that_can_be_reopened() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(path.as_cstr())
+        path.destroy()
+    }
+
+    if unlink(path.as_cstr()) != 0 {
+        return_err .Failed
+    }
+
+    try write_file(path.as_bytes(), "created")
+
+    mut bytes := try read_file(path.as_bytes())
+    defer bytes.destroy()
+
+    if !filesystem_bytes_equal(bytes.as_bytes(), "created") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn atomic_write_creates_and_replaces_destination() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(path.as_cstr())
+        path.destroy()
+    }
+
+    try write_file(path.as_bytes(), "old contents")
+    try write_file_atomic(path.as_bytes(), "replacement")
+
+    mut bytes := try read_file(path.as_bytes())
+    defer bytes.destroy()
+
+    if !filesystem_bytes_equal(bytes.as_bytes(), "replacement") {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn list_directory_reports_created_regular_file_and_omits_dot_entries() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer {
+        unlink(path.as_cstr())
+        path.destroy()
+    }
+
+    const expected_name := filesystem_basename(path.as_bytes())
+
+    mut entries := try list_directory("/tmp")
+    defer destroy_directory_entries(&entries)
+
+    mut found := false
+    for i in ..entries.length {
+        const entry := &entries.data[i]
+        if filesystem_bytes_equal(entry.name.as_bytes(), ".") ||
+           filesystem_bytes_equal(entry.name.as_bytes(), "..") {
+            return_err .Failed
+        }
+        if filesystem_bytes_equal(entry.name.as_bytes(), expected_name) {
+            if entry.is_directory || !entry.is_regular {
+                return_err .Failed
+            }
+            found = true
+        }
+    }
+
+    if !found {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn missing_paths_return_errors() -> Filesystem_Test_Result {
+    const missing := "/tmp/mirage-filesystem-path-that-must-not-exist-7f19b33c"
+    const _, read_err := read_file(missing)
+    const _, canonical_err := canonicalize(missing)
+    const _, list_err := list_directory(missing)
+
+    if !read_err || !canonical_err || !list_err {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn allocation_failures_are_reported_without_partial_results() -> Filesystem_Test_Result {
+    const temporary, temporary_err := make_temporary_file("/tmp/mirage-filesystem-test-", nil_allocator())
+    const _, canonical_err := canonicalize("/tmp", nil_allocator())
+    const entries, list_err := list_directory("/tmp", nil_allocator())
+
+    if !temporary_err || !temporary.is_empty() || !canonical_err || !list_err || entries.data != nil || entries.length != 0 || entries.capacity != 0 {
+        return_err .Failed
+    }
+
+    return_ok
+}

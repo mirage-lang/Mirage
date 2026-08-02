@@ -1,0 +1,203 @@
+#import("core/string")
+
+const SEPARATOR := '/'
+
+pub type Path_Error = error(String_Error | Path_Error_Kind)
+pub type Path_Error_Kind = enum {
+    Empty_Path
+    Escapes_Root
+}
+
+pub fn is_separator(value: u8) -> bool {
+    return value == SEPARATOR
+}
+
+pub fn is_absolute(path: []u8) -> bool {
+    return len(path) > 0 && is_separator(path[0])
+}
+
+pub fn trim_trailing_separators(path: []u8) -> []u8 {
+    mut end := len(path)
+    while end > 1 && is_separator(path[end - 1]) {
+        end--
+    }
+
+    return path[..end]
+}
+
+pub fn filename(mut path: []u8) -> []u8 {
+    path = trim_trailing_separators(path)
+
+    mut start := len(path)
+    while start > 0 && !is_separator(path[start - 1]) {
+        start--
+    }
+
+    return path[start..]
+}
+
+pub fn parent(mut path: []u8) -> []u8 {
+    path = trim_trailing_separators(path)
+
+    mut end := len(path)
+    while end > 0 && !is_separator(path[end - 1]) {
+        end--
+    }
+
+    while end > 1 && is_separator(path[end - 1]) {
+        end--
+    }
+
+    if end == 0 {
+        return "."
+    }
+
+    return path[..end]
+}
+
+pub fn extension(path: []u8) -> []u8 {
+    const name := filename(path)
+
+    mut i := len(name)
+    while i > 0 {
+        if name[--i] == '.' {
+            return i == 0 ? nil : name[i..]
+        }
+    }
+
+    return nil
+}
+
+pub fn has_extension(path: []u8, expected: []u8) -> bool {
+    const ext := extension(path)
+    if len(ext) != len(expected) {
+        return false
+    }
+
+    for i in ..len(ext) {
+        if ext[i] != expected[i] {
+            return false
+        }
+    }
+
+    return true
+}
+
+pub fn normalize(path: []u8, allocator := heap_allocator()) -> (String, Path_Error) {
+    if len(path) == 0 {
+        return_err .Empty_Path
+    }
+
+    const absolute := is_absolute(path)
+
+    mut out := make_string(allocator)
+    if absolute {
+        try out.append_byte(SEPARATOR)
+    }
+
+    mut component_starts: [256]usize = undefined
+    mut component_is_parent: [256]bool = undefined
+    mut depth: usize = 0
+    mut index: usize = 0
+
+    while index < len(path) {
+        while index < len(path) && is_separator(path[index]) {
+            index++
+        }
+
+        const start := index
+        while index < len(path) && !is_separator(path[index]) {
+            index++
+        }
+
+        if start == index {
+            break
+        }
+
+        const component := path[start..index]
+        if len(component) == 1 && component[0] == '.' {
+            continue
+        }
+
+        if len(component) == 2 && component[0] == '.' && component[1] == '.' {
+            if depth > 0 && !component_is_parent[depth - 1] {
+                out.length = component_starts[--depth]
+                if out.data != nil {
+                    out.data[out.length] = 0
+                }
+                continue
+            }
+            
+            if absolute {
+                out.destroy()
+                return_err .Escapes_Root
+            }
+        }
+
+        if depth >= 256 {
+            out.destroy()
+            return_err .Escapes_Root
+        }
+
+        component_starts[depth] = out.length
+        component_is_parent[depth] = len(component) == 2 && component[0] == '.' && component[1] == '.'
+        depth++
+
+        try append_component(&out, component)
+    }
+
+    if out.length == 0 {
+        try out.append_byte(absolute ? SEPARATOR : '.')
+    }
+
+    return_ok out
+}
+
+fn append_component(out: *String, component: []u8) -> Path_Error {
+    if out.length > 0 && !is_separator(out.data[out.length - 1]) {
+        try out.append_byte(SEPARATOR)
+    }
+
+    try out.append_bytes(component)
+    
+    return_ok
+}
+
+pub fn join(left: []u8, right: []u8, allocator := heap_allocator()) -> (String, String_Error) {
+    if len(right) > 0 && is_absolute(right) {
+        return make_string_from_bytes(right, allocator)
+    }
+
+    mut result := try make_string_from_bytes(left, allocator)
+    if result.length > 0 && !is_separator(result.data[result.length - 1]) && len(right) > 0 {
+        try result.append_byte(SEPARATOR)
+    }
+
+    mut start: usize = 0
+    while start < len(right) && is_separator(right[start]) {
+        start++
+    }
+
+    try result.append_bytes(right[start..])
+
+    return_ok result
+}
+
+
+pub fn is_contained(root: []u8, candidate: []u8) -> bool {
+    if len(root) == 0 || len(candidate) < len(root) {
+        return false
+    }
+
+    for i in ..len(root) {
+        if root[i] != candidate[i] {
+            return false
+        }
+    }
+
+    if len(candidate) == len(root) {
+        return true
+    }
+
+    return is_separator(root[len(root) - 1]) || is_separator(candidate[len(root)])
+}

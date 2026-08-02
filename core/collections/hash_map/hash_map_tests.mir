@@ -1,0 +1,425 @@
+#compile_only_if($tests_enabled)
+
+pub type Hash_Map_Test_Result = error(Hash_Map_Test_Error | Hash_Map_Error)
+pub type Hash_Map_Test_Error = enum {
+    Failed = 1
+}
+
+fn constant_hash(_: i32) -> u64 {
+    return 15
+}
+
+fn modulo_ten_hash(value: i32) -> u64 {
+    return cast((value < 0 ? -value : value) % 10, u64)
+}
+
+fn modulo_ten_equal(a: i32, b: i32) -> bool {
+    const a_positive := a < 0 ? -a : a
+    const b_positive := b < 0 ? -b : b
+    return a_positive % 10 == b_positive % 10
+}
+
+@test
+fn empty_map_has_no_entries() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    if !map.is_empty() || map.count != 0 || map.capacity != 0 {
+        return_err .Failed
+    }
+
+    const value, found := map.get(123)
+    if found || value != 0 || map.contains(123) || map.remove(123) {
+        return_err .Failed
+    
+    }
+    return_ok
+}
+
+@test
+fn reserve_allocates_power_of_two_storage_without_shrinking() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    try map.reserve(17)
+    if map.capacity < 17 || (map.capacity & (map.capacity - 1)) != 0 || map.count != 0 {
+        return_err .Failed
+    }
+
+    const slots := map.slots
+    const capacity := map.capacity
+
+    try map.reserve(4)
+
+    if map.slots != slots || map.capacity != capacity {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn put_get_and_update() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    try map.put(7, 70)
+    if map.count != 1 || map.is_empty() {
+        return_err .Failed
+    }
+
+    const first, first_found := map.get(7)
+    if !first_found || first != 70 || !map.contains(7) {
+        return_err .Failed
+    }
+
+    try map.put(7, 700)
+
+    const updated, updated_found := map.get(7)
+    if !updated_found || updated != 700 || map.count != 1 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn get_ptr_can_mutate_an_existing_value() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    const missing, missing_found := map.get_ptr(7)
+    if missing_found || missing != nil {
+        return_err .Failed
+    }
+
+    try map.put(7, 70)
+
+    const value_ptr, found := map.get_ptr(7)
+    if !found || value_ptr == nil || value_ptr.* != 70 {
+        return_err .Failed
+    }
+
+    value_ptr.* = 700
+
+    const value, value_found := map.get(7)
+    if !value_found || value != 700 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn get_or_put_reports_insertion_and_preserves_existing_value() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+    
+    defer map.destroy()
+
+    const inserted_ptr, inserted := try map.get_or_put(4, 40)
+    if !inserted || inserted_ptr == nil || inserted_ptr.* != 40 || map.count != 1 {
+        return_err .Failed
+    }
+
+    inserted_ptr.* = 44
+
+    const existing_ptr, inserted_again := try map.get_or_put(4, 400)
+    if inserted_again || existing_ptr == nil || existing_ptr.* != 44 || map.count != 1 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn collisions_survive_lookup_and_removal() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), constant_hash)
+
+    defer map.destroy()
+
+    try map.put(1, 10)
+    try map.put(2, 20)
+    try map.put(3, 30)
+
+    for key in 1..4 {
+        const value, found := map.get(key)
+        if !found || value != key * 10 {
+            return_err .Failed
+        }
+    }
+
+    mut removed := 0
+    if !map.remove(2, &removed) || removed != 20 || map.contains(2) || map.count != 2 {
+        return_err .Failed
+    }
+
+    const one, found_one := map.get(1)
+    const three, found_three := map.get(3)
+    if !found_one || one != 10 || !found_three || three != 30 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn removing_missing_collision_terminates() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), constant_hash)
+
+    defer map.destroy()
+
+    try map.put(1, 10)
+    try map.put(2, 20)
+    try map.put(3, 30)
+
+    // Regression: remove used to omit the probe increment. Looking for a missing key whose
+    // home slot was occupied looped forever instead of reaching the first Empty slot.
+    if map.remove(99) || map.count != 3 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn tombstone_is_reused_and_accounted_once() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), constant_hash)
+
+    defer map.destroy()
+
+    for key in ..3 {
+        try map.put(key, key * 10)
+    }
+
+    const initial_capacity := map.capacity
+    if !map.remove(1) || map.tombstone_count != 1 {
+        return_err .Failed
+    }
+
+    try map.put(4, 40)
+
+    const value, found := map.get(4)
+    if !found || value != 40 || map.count != 3 || map.tombstone_count != 0 || map.capacity != initial_capacity {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn collision_probe_wraps_at_capacity() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), constant_hash)
+
+    defer map.destroy()
+
+    // constant_hash returns 15, the last slot in the initial 16-slot table. Every later
+    // insertion must wrap to slot zero and continue from there.
+    for key in ..8 {
+        try map.put(key, key + 100)
+    }
+
+    for key in ..8 {
+        const value, found := map.get(key)
+        if !found || value != key + 100 {
+            return_err .Failed
+        }
+    }
+
+    return_ok
+}
+
+@test
+fn growth_rehashes_every_live_entry() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    for key in ..256 {
+        try map.put(key, key * 3)
+    }
+
+    if map.count != 256 || map.capacity <= 16 {
+        return_err .Failed
+    }
+
+    for key in ..256 {
+        const value, found := map.get(key)
+        if !found || value != key * 3 {
+            return_err .Failed
+        }
+    }
+
+    for key in ..128 {
+        if !map.remove(key * 2) {
+            return_err .Failed
+        }
+    }
+
+    for key in ..256 {
+        const _, found := map.get(key)
+        if found == (key % 2 == 0) {
+            return_err .Failed
+        }
+    }
+
+    return_ok
+}
+
+@test
+fn iteration_returns_each_live_entry_once() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), constant_hash)
+
+    defer map.destroy()
+
+    try map.put(1, 10)
+    try map.put(2, 20)
+    try map.put(3, 30)
+    try map.put(4, 40)
+
+    map.remove(3)
+
+    mut cursor: usize = 0
+    mut seen := 0
+    mut visited := 0
+    while true {
+        const key, value, found := map.next(&cursor)
+        if !found {
+            break
+        }
+
+        if value != key * 10 {
+            return_err .Failed
+        }
+        if key == 1 {
+            seen |= 1
+        } else if key == 2 {
+            seen |= 2
+        } else if key == 4 {
+            seen |= 4
+        } else {
+            return_err .Failed
+        }
+        visited++
+    }
+
+    const _, _, found_after_end := map.next(&cursor)
+    if visited != 3 || seen != 7 || cursor != map.capacity || found_after_end {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn custom_hash_and_equality_update_equivalent_key() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](heap_allocator(), modulo_ten_hash, modulo_ten_equal)
+
+    defer map.destroy()
+
+    try map.put(12, 120)
+    try map.put(-2, 200)
+
+    const value, found := map.get(22)
+    if !found || value != 200 || map.count != 1 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn clear_keeps_storage_but_removes_entries() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    for key in ..32 {
+        try map.put(key, key)
+    }
+
+    const capacity := map.capacity
+
+    map.remove(4)
+    map.clear()
+
+    if !map.is_empty() || map.count != 0 || map.tombstone_count != 0 || map.capacity != capacity {
+        return_err .Failed
+    }
+
+    for key in ..32 {
+        if map.contains(key) {
+            return_err .Failed
+        }
+    }
+
+    try map.put(99, 123)
+
+    const value, found := map.get(99)
+    if !found || value != 123 || map.count != 1 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn destroy_resets_map_state() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    try map.put(1, 2)
+
+    map.destroy()
+
+    if map.slots != nil || map.count != 0 || map.tombstone_count != 0 || map.capacity != 0 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn allocation_failure_is_reported_without_mutation() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](nil_allocator())
+
+    defer map.destroy()
+
+    const err := map.put(1, 2)
+    if !err || map.count != 0 || map.capacity != 0 || map.slots != nil {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn reserve_failure_is_reported_without_mutation() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32](nil_allocator())
+
+    defer map.destroy()
+
+    const err := map.reserve(16)
+    if !err || map.count != 0 || map.capacity != 0 || map.slots != nil {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn impossible_reserve_reports_capacity_overflow() -> Hash_Map_Test_Result {
+    mut map := make_hash_map[i32, i32]()
+
+    defer map.destroy()
+
+    const maximum := ~cast(0, usize)
+    const err := map.reserve(maximum)
+    if !err || map.count != 0 || map.capacity != 0 || map.slots != nil {
+        return_err .Failed
+    }
+
+    return_ok
+}

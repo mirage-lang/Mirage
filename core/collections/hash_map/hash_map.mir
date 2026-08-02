@@ -1,0 +1,274 @@
+#import("core/hash")
+
+const INITIAL_CAPACITY: usize = 16
+const MAX_LOAD_NUMERATOR: usize = 3
+const MAX_LOAD_DENOMINATOR: usize = 4
+const MAX_USIZE := ~cast(0, usize)
+
+type Slot_State = enum(u8) {
+    Empty
+    Occupied
+    Tombstone
+}
+
+type Slot[K: type, V: type] = struct {
+    state: Slot_State = .Empty
+    key: K
+    value: V
+}
+
+pub type Equal[K: type] = fn(K, K) -> bool
+
+pub type Hash_Map_Error = error(Allocator_Error | Hash_Map_Error_Kind)
+pub type Hash_Map_Error_Kind = enum {
+    Capacity_Overflow
+}
+
+pub type Hash_Map[K: type, V: type] = struct {
+    allocator: Allocator
+    slots: *Slot[K, V] = nil
+    capacity: usize = 0
+    count: usize = 0
+    tombstone_count: usize = 0
+    hash: Hash_Function[K]
+    eq: Equal[K]
+}
+
+fn default_eq[K: type](a: K, b: K) -> bool {
+    return a == b
+}
+
+pub fn make_hash_map[K: type, V: type](allocator := heap_allocator(), hash := fnv1a[K], eq := default_eq[K]) -> Hash_Map[K, V] {
+    return {
+        .allocator = allocator,
+        .hash = hash,
+        .eq = eq,
+    }
+}
+
+impl Hash_Map[K: type, V: type] {
+    fn find_slot(self, key: K) -> (index: usize, found: bool) {
+        const mask := self.capacity - 1
+        
+        mut index := cast(self.hash(key), usize) & mask
+        mut first_tombstone := MAX_USIZE
+
+        while self.slots[index].state != .Empty {
+            if self.slots[index].state == .Occupied {
+                if self.eq(self.slots[index].key, key) {
+                    return index, true
+                }
+            } else if first_tombstone == MAX_USIZE {
+                first_tombstone = index
+            }
+            index = (index + 1) & mask
+        }
+
+        return first_tombstone != MAX_USIZE ? first_tombstone : index, false
+    }
+
+    pub fn reserve(self, minimum_capacity: usize) -> Hash_Map_Error {
+        if minimum_capacity <= self.capacity {
+            return_ok
+        }
+
+        mut capacity := self.capacity == 0 ? INITIAL_CAPACITY : self.capacity
+        while capacity < minimum_capacity {
+            if capacity > MAX_USIZE / 2 {
+                return_err .Capacity_Overflow
+            }
+            capacity *= 2
+        }
+
+        return self.grow_to(capacity)
+    }
+
+    pub fn put(self, key: K, value: V) -> Hash_Map_Error {
+        try self.maybe_grow()
+
+        const index, found := self.find_slot(key)
+        if found {
+            self.slots[index].value = value
+            return_ok
+        }
+
+        if self.slots[index].state == .Tombstone {
+            self.tombstone_count--
+        }
+
+        self.count++
+        self.slots[index] = {
+            .state = .Occupied,
+            .key = key,
+            .value = value,
+        }
+
+
+        return_ok
+    }
+
+    pub fn get_or_put(self, key: K, default_value: V) -> (*V, bool, Hash_Map_Error) {
+        try self.maybe_grow()
+
+        const index, found := self.find_slot(key)
+        if found {
+            return_ok &self.slots[index].value, false
+        }
+
+        if self.slots[index].state == .Tombstone {
+            self.tombstone_count--
+        }
+
+        self.slots[index] = {
+            .state = .Occupied,
+            .key = key,
+            .value = default_value,
+        }
+
+        self.count++
+
+        return_ok &self.slots[index].value, true
+    }
+
+    pub fn get(self, key: K) -> (V, bool) {
+        if self.capacity == 0 {
+            return default, false
+        }
+
+        const index, found := self.find_slot(key)
+
+        return found ? self.slots[index].value : default, found
+    }
+
+    pub fn get_ptr(self, key: K) -> (*V, bool) {
+        if self.capacity == 0 {
+            return nil, false
+        }
+
+        const index, found := self.find_slot(key)
+
+        return found ? &self.slots[index].value : default, found
+    }
+
+    pub fn contains(self, key: K) -> bool {
+        const _, found := self.get_ptr(key)
+
+        return found
+    }
+
+    pub fn remove(self, key: K, value_out: *V = nil) -> bool {
+        if self.capacity == 0 {
+            return false
+        }
+
+        const mask := self.capacity - 1
+        
+        mut index := cast(self.hash(key), usize) & mask
+        while self.slots[index].state != .Empty {
+            if self.slots[index].state == .Occupied && self.eq(self.slots[index].key, key) {
+                if value_out != nil {
+                    value_out.* = self.slots[index].value
+                }
+
+                self.slots[index].state = .Tombstone
+                self.count--
+                self.tombstone_count++
+
+                return true
+            }
+
+            index = (index + 1) & mask
+        }
+
+        return false
+    }
+
+    pub fn next(self, cursor: *usize) -> (K, V, bool) {
+        while cursor.* < self.capacity {
+            const index := cursor.*
+
+            cursor.*++
+
+            if self.slots[index].state == .Occupied {
+                return self.slots[index].key, self.slots[index].value, true
+            }
+        }
+
+        return default, default, false
+    }
+
+    pub fn clear(self) {
+        for index in ..self.capacity {
+            self.slots[index].state = .Empty
+        }
+
+        self.count = 0
+        self.tombstone_count = 0
+    }
+
+    pub fn destroy(self) {
+        if self.slots != nil {
+            self.allocator.free(self.slots)
+        }
+
+        self.slots = nil
+        self.capacity = 0
+        self.count = 0
+        self.tombstone_count = 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.count == 0
+    }
+
+    fn maybe_grow(self) -> Hash_Map_Error {
+        if self.capacity == 0 {
+            return self.grow_to(INITIAL_CAPACITY)
+        }
+
+        const used := self.count + self.tombstone_count
+        if used == MAX_USIZE {
+            return_err .Capacity_Overflow
+        }
+
+        if (used + 1) * MAX_LOAD_DENOMINATOR <= self.capacity * MAX_LOAD_NUMERATOR {
+            return_ok
+        }
+
+        if self.capacity > MAX_USIZE / 2 {
+            return_err .Capacity_Overflow
+        }
+
+        return self.grow_to(self.capacity * 2)
+    }
+
+    fn grow_to(self, new_capacity: usize) -> Hash_Map_Error {
+        if new_capacity > MAX_USIZE / size_of(Slot[K, V]) {
+            return_err .Capacity_Overflow
+        }
+
+        const new_slots: *Slot[K, V] = try self.allocator.alloc(new_capacity * size_of(Slot[K, V]))
+        const old_slots := self.slots
+        const old_capacity := self.capacity
+
+        defer if old_slots != nil {
+            self.allocator.free(old_slots)
+        }
+
+        self.slots = new_slots
+        self.capacity = new_capacity
+        self.count = 0
+        self.tombstone_count = 0
+
+        for index in ..old_capacity {
+            if old_slots[index].state == .Occupied {
+                const target, _ := self.find_slot(old_slots[index].key)
+
+                self.slots[target] = old_slots[index]
+                self.count++
+            }
+        }
+
+        return_ok
+    }
+}

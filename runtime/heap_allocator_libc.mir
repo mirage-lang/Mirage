@@ -1,8 +1,12 @@
-const libc := import("libc")
+// The heap allocator for every target that has a libc — which, since the wasm port, is
+// all of them: emscripten's malloc is as real an allocator as glibc's. Renamed from
+// heap_allocator_linux.mir for that reason, and deliberately carries no
+// '#compile_only_if' guard; there is nothing Linux-specific in it.
+#import("libc") as libc
 
 impl Allocator for HeapAllocator {
     fn alloc(self, size: usize, zero_memory: bool) -> (anyptr, ?Allocator_Error) {
-        const ptr := libc.calloc(size) when zero_memory else libc.malloc(size)
+        const ptr := libc.calloc(size, 1) when zero_memory else libc.malloc(size)
         if ptr == nil {
             return_err .Out_Of_Memory
         }

@@ -1,5 +1,6 @@
-const target_os   := import("build/options").target_os
-const target_arch := import("build/options").target_arch
+#import("build/options") as options
+const target_os := options.target_os
+const target_arch := options.target_arch
 const shared_lib  := $option("vendor/raylib/shared_lib", false)
 
 // Windows
@@ -29,6 +30,17 @@ when target_os == .Linux {
 // WebAssembly
 when target_arch == .Wasm32 || target_arch == .Wasm64p32 {
     #link(lib, "libs/wasm/libraylib.web.a")
+
+    // raylib's web backend is built on emscripten's GLFW3 port; without this the link
+    // fails on every glfw* symbol rcore.o refers to.
+    #link(flag, "-sUSE_GLFW=3")
+
+    // This build of raylib references 'emscripten_sleep' (rcore.o — WaitTime, reached
+    // from EndDrawing whenever SetTargetFPS is in effect), which only exists under
+    // ASYNCIFY. It is also what makes an ordinary 'while !WindowShouldClose()' loop
+    // work in a page: the sleep is where the frame yields back to the browser, so a
+    // program written against the desktop shape of raylib needs no restructuring.
+    #link(flag, "-sASYNCIFY")
 }
 
 // Windows has 32-bit long even on x64...

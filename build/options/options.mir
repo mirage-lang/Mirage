@@ -1,6 +1,13 @@
+// Variant names must match what the driver derives from the target triple
+// (default_target_os in main.cpp) — a name it produces that is missing here is a
+// '$option' coercion failure, not a fallback to 'Other'. 'Wasm32' is the OS for every
+// wasm target: emscripten is what a wasm build's platform actually is, and the
+// distinction from a bare wasm32 is carried by target_arch.
 pub type OperatingSystem = enum {
     Linux
     Windows
+    MacOS
+    Wasm32
     Other
 }
 

@@ -1,0 +1,79 @@
+#import("core/collections/list")
+
+pub type Arena_Id = usize
+
+pub const INVALID_ARENA_ID := ~cast(0, Arena_Id)
+
+pub type Arena_Error = error(List_Error | Arena_Error_Kind)
+pub type Arena_Error_Kind = enum {
+    Too_Many_Values
+    Invalid_Handle
+}
+
+pub type Arena[T: type] = struct {
+    values: List[T]
+}
+
+pub fn make_arena[T: type](allocator := heap_allocator()) -> Arena[T] {
+    return {
+        .values = make_list[T](allocator)
+    }
+}
+
+pub fn make_arena_with_capacity[T: type](capacity: usize, allocator := heap_allocator()) -> (Arena[T], Arena_Error) {
+    const values := try make_list_with_capacity[T](capacity, allocator)
+
+    return_ok {
+        .values = values,
+    }
+}
+
+impl Arena[T: type] {
+    pub fn add(self, value: T) -> (Arena_Id, Arena_Error) {
+        if self.values.length >= INVALID_ARENA_ID {
+            return_err .Too_Many_Values
+        }
+
+        const id := cast(self.values.length, Arena_Id)
+
+        try self.values.push(value)
+
+        return_ok id
+    }
+
+    pub fn contains(self, id: Arena_Id) -> bool {
+        return id != INVALID_ARENA_ID && id < self.values.length
+    }
+
+    pub fn get(self, id: Arena_Id) -> (T, Arena_Error) {
+        if !self.contains(id) {
+            return_err .Invalid_Handle
+        }
+
+        return_ok self.values.data[id]
+    }
+
+    pub fn get_ptr(self, id: Arena_Id) -> (*T, Arena_Error) {
+        if !self.contains(id) {
+            return_err .Invalid_Handle
+        }
+
+        return_ok &self.values.data[id]
+    }
+
+    pub fn get_unchecked(self, id: Arena_Id) -> *T {
+        return &self.values.data[id]
+    }
+
+    pub fn count(self) -> usize {
+        return self.values.length
+    }
+
+    pub fn clear(self) {
+        self.values.clear()
+    }
+
+    pub fn destroy(self) {
+        self.values.destroy()
+    }
+}

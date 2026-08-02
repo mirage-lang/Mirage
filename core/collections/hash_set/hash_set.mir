@@ -1,0 +1,58 @@
+#import("core/collections/hash_map")
+#import("core/hash")
+
+type Present = struct {}
+
+pub type Hash_Set[T: type] = struct {
+    values: Hash_Map[T, Present]
+}
+
+fn default_set_eq[T: type](a: T, b: T) -> bool {
+    return a == b
+}
+
+pub fn make_hash_set[T: type](allocator := heap_allocator(), hash := fnv1a[T], eq := default_set_eq[T]) -> Hash_Set[T] {
+    return {
+        .values = make_hash_map[T, Present](allocator, hash, eq),
+    }
+}
+
+impl Hash_Set[T: type] {
+    pub fn reserve(self, minimum_capacity: usize) -> ?Hash_Map_Error {
+        return self.values.reserve(minimum_capacity)
+    }
+
+    pub fn insert(self, value: T) -> (inserted: bool, ?Hash_Map_Error) {
+        const _, inserted := try self.values.get_or_put(value, {})
+        return_ok inserted
+    }
+
+    pub fn contains(self, value: T) -> bool {
+        return self.values.contains(value)
+    }
+
+    pub fn remove(self, value: T) -> bool {
+        return self.values.remove(value)
+    }
+
+    pub fn next(self, cursor: *usize) -> (T, bool) {
+        const value, _, found := self.values.next(cursor)
+        return value, found
+    }
+
+    pub fn count(self) -> usize {
+        return self.values.count
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.values.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.values.clear()
+    }
+
+    pub fn destroy(self) {
+        self.values.destroy()
+    }
+}

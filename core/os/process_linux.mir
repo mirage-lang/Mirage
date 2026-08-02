@@ -1,0 +1,103 @@
+#compile_only_if(options.target_os == .Linux)
+
+#import("build/options") as options
+
+#import("core/collections/list")
+#import("core/string")
+#import("core/sys/linux") as linux
+
+const EXEC_FAILED: i32 = 127
+
+macro terminating_signal(status: i32) -> status & 0x7f
+
+macro exited_normally(status: i32) -> terminating_signal(status) == 0
+macro exit_status(status: i32) -> (status >> 8) & 0xff
+
+fn _map_errno_to_error(errno: i64) -> Process_Error {
+    if errno == linux.ENOMEM {
+        return .Out_Of_Memory
+    }
+
+    return match errno {
+        linux.EPERM:  .Permission_Denied,
+        linux.ECHILD: .No_Child_Process,
+        linux.EAGAIN: .Resource_Unavailable,
+        linux.EINVAL: .Invalid_Argument,
+
+        _: .Unknown,
+    }
+}
+
+@always_inline
+fn _run(arguments: [][]u8, allocator := heap_allocator()) -> (Process_Result, Process_Error) {
+    if len(arguments) == 0 || len(arguments[0]) == 0 {
+        return_err .No_Arguments
+    }
+
+    mut owned := make_list[String](allocator)
+
+    defer {
+        for index in ..owned.length {
+            owned.data[index].destroy()
+        }
+        
+        owned.destroy()
+    }
+
+    try owned.reserve(len(arguments))
+
+    for argument in arguments {
+        const value := make_string_from_bytes(argument, allocator)
+
+        try owned.push(value)
+    }
+
+    const argv: **u8 = stackalloc((len(arguments) + 1) * size_of(*u8))
+    for index in ..owned.length {
+        argv[index] = owned.data[index].as_cstr()
+    }
+
+    argv[len(arguments)] = nil
+
+    mut result := linux.fork()
+    if result < 0 {
+        return_err _map_errno_to_error(-result)
+    }
+
+    const pid := cast(result, linux.Pid)
+    if pid == 0 {
+        linux.execve(argv[0], argv, nil)
+        linux.exit(EXEC_FAILED)
+    }
+
+    mut status: i32 = 0
+
+    while true {
+        result = linux.wait4(pid, &status, 0, nil)
+        if result < 0 {
+            if -result == linux.EINTR {
+                continue
+            }
+
+            return_err _map_errno_to_error(-result)
+        }
+
+        if cast(result, linux.Pid) == pid {
+            break
+        }
+
+        return_err .Unknown
+    }
+
+    if exited_normally(status) {
+        return_ok {
+            .kind = .Exited, 
+            .code = exit_status(status),
+        }
+    }
+
+    return_ok {
+        .kind = .Signaled, 
+        .code = terminating_signal(status),
+    }
+}

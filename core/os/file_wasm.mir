@@ -1,24 +1,31 @@
-#compile_only_if(options.target_os == .Linux)
+#compile_only_if(options.target_os == .Wasm32)
 
+// The wasm/emscripten File backend. Structurally a mirror of file_linux.mir — same
+// shape, same flag translation, same errno-to-IO_Error mapping — over core/sys/wasm,
+// which presents emscripten's libc under the same -errno return convention.
+//
+// The filesystem underneath is emscripten's, not the host's: paths resolve inside the
+// virtual filesystem the page was linked with (--preload-file / --embed-file assets,
+// plus whatever the runtime mounts), and there is nothing else to open.
 #import("build/options") as options
 
-#import("core/sys/linux") as linux
+#import("core/sys/wasm") as wasm
 #import("core/io")
 
-pub type Linux_File = struct {
+pub type Wasm_File = struct {
     allocator: Allocator
-    fd: linux.Fd
+    fd: wasm.Fd
 }
 
-mut linux_std_files: [3]Linux_File
+mut wasm_std_files: [3]Wasm_File
 
-fn _init_std_stream(file: *File, fd: linux.Fd) {
-    linux_std_files[fd] = {
+fn _init_std_stream(file: *File, fd: wasm.Fd) {
+    wasm_std_files[fd] = {
         .allocator = nil_allocator(),
         .fd = fd,
     }
 
-    file.* = &linux_std_files[fd]
+    file.* = &wasm_std_files[fd]
 }
 
 @init
@@ -29,9 +36,9 @@ fn _init_std_streams() {
 }
 
 @always_inline
-fn _new_file(fd: linux.Fd) -> (*Linux_File, File_Error) {
+fn _new_file(fd: wasm.Fd) -> (*Wasm_File, File_Error) {
     const allocator := heap_allocator()
-    const file: *Linux_File = try allocator.alloc(size_of(Linux_File))
+    const file: *Wasm_File = try allocator.alloc(size_of(Wasm_File))
 
     file.* = {
         .allocator = heap_allocator(),
@@ -44,46 +51,46 @@ fn _new_file(fd: linux.Fd) -> (*Linux_File, File_Error) {
 @always_inline
 fn _map_errno_to_io_error(errno: i64) -> IO_Error {
     return match errno {
-        linux.EINVAL: .Invalid_Argument,
-        linux.ENOENT: .Not_Exist,
-        linux.EACCES: .Permission_Denied,
-        linux.EPERM:  .Permission_Denied,
-        linux.EAGAIN: .Would_Block,
-        linux.EBADF:  .Closed,
-        linux.EINTR:  .Interrupted,
+        wasm.EINVAL: .Invalid_Argument,
+        wasm.ENOENT: .Not_Exist,
+        wasm.EACCES: .Permission_Denied,
+        wasm.EPERM:  .Permission_Denied,
+        wasm.EAGAIN: .Would_Block,
+        wasm.EBADF:  .Closed,
+        wasm.EINTR:  .Interrupted,
 
         _: .Unknown
     }
 }
 
-fn _open(name: []u8, flags: File_Flags) -> (*Linux_File, File_Error) {
+fn _open(name: []u8, flags: File_Flags) -> (*Wasm_File, File_Error) {
     if len(name) == 0 {
         return_err .Invalid_Path
     }
 
     mut o_flags: i32 = 0
     if .Write in flags {
-        o_flags = linux.O_RDWR when .Read in flags else linux.O_WRONLY
+        o_flags = wasm.O_RDWR when .Read in flags else wasm.O_WRONLY
     } else {
-        o_flags = linux.O_RDONLY
+        o_flags = wasm.O_RDONLY
     }
 
-    if .Create       in flags { o_flags |= linux.O_CREAT    }
-    if .Truncate     in flags { o_flags |= linux.O_TRUNC    }
-    if .Append       in flags { o_flags |= linux.O_APPEND   }
-    if .Sync         in flags { o_flags |= linux.O_DSYNC    }
-    if .Non_Blocking in flags { o_flags |= linux.O_NONBLOCK }
-    if .Exclusive    in flags { o_flags |= linux.O_EXCL     }
+    if .Create       in flags { o_flags |= wasm.O_CREAT    }
+    if .Truncate     in flags { o_flags |= wasm.O_TRUNC    }
+    if .Append       in flags { o_flags |= wasm.O_APPEND   }
+    if .Sync         in flags { o_flags |= wasm.O_DSYNC    }
+    if .Non_Blocking in flags { o_flags |= wasm.O_NONBLOCK }
+    if .Exclusive    in flags { o_flags |= wasm.O_EXCL     }
 
-    const result := linux.open(name, o_flags, 0o666)
+    const result := wasm.open(name, o_flags, 0o666)
     if result < 0 {
         return_err _map_errno_to_io_error(-result)
     }
 
-    const fd := cast(result, linux.Fd)
+    const fd := cast(result, wasm.Fd)
     const file, err := _new_file(fd)
-    defer if err { 
-        linux.close(fd) 
+    defer if err {
+        wasm.close(fd)
     }
 
     if err {
@@ -93,9 +100,9 @@ fn _open(name: []u8, flags: File_Flags) -> (*Linux_File, File_Error) {
     return_ok file
 }
 
-impl File for Linux_File {
+impl File for Wasm_File {
     fn read(self, dst: []u8) -> (usize, ?IO_Error) {
-        const result := linux.read(self.fd, dst, len(dst))
+        const result := wasm.read(self.fd, dst, len(dst))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
         }
@@ -108,7 +115,7 @@ impl File for Linux_File {
     }
 
     fn write(self, src: []byte) -> (usize, ?IO_Error) {
-        const result := linux.write(self.fd, src, len(src))
+        const result := wasm.write(self.fd, src, len(src))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
         }
@@ -117,7 +124,7 @@ impl File for Linux_File {
     }
 
     fn seek(self, offset: i64, whence: Seek_From) -> (i64, ?IO_Error) {
-        const result := linux.lseek(self.fd, offset, cast(whence, i32))
+        const result := wasm.lseek(self.fd, offset, cast(whence, i32))
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
         }
@@ -139,16 +146,11 @@ impl File for Linux_File {
     }
 
     fn close(self) -> ?IO_Error {
-        if self.fd == -1 {
-            return_err .Closed
-        }
-
-        const result := linux.close(self.fd)
+        const result := wasm.close(self.fd)
         if result < 0 {
             return_err _map_errno_to_io_error(-result)
         }
 
-        self.fd = -1
         return_ok
     }
 
@@ -157,7 +159,7 @@ impl File for Linux_File {
             return
         }
 
-        linux.close(self.fd)
+        wasm.close(self.fd)
 
         self.fd = -1
         self.allocator.free(self)

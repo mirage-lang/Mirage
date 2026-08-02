@@ -1,0 +1,99 @@
+// The same call surface core/sys/linux exposes, over emscripten's libc instead of raw
+// x86-64 syscalls — deliberately including the RETURN CONVENTION: a negative errno on
+// failure, never libc's -1-plus-errno. Keeping that convention means core/os and
+// core/net's two backends differ only in which module they import, not in how they read
+// results.
+//
+// Note there is no meaningful "syscall" on this platform: every one of these is a call
+// into emscripten's libc, which for files goes to its in-memory filesystem and for
+// sockets goes to the WebSocket bridge.
+
+#import("libc") as libc
+
+@always_inline
+fn _errno() -> i64 {
+    return cast(libc.__errno_location().*, i64)
+}
+
+// Turns libc's (-1, errno) into the -errno the Linux backend's callers expect. Any
+// non-negative result is a success and passes through untouched.
+@always_inline
+fn _result(value: i64) -> i64 {
+    if value < 0 {
+        return -_errno()
+    }
+
+    return value
+}
+
+pub fn read(fd: Fd, buf: *u8, count: usize) -> i64 {
+    return _result(cast(libc.read(fd, buf, count), i64))
+}
+
+pub fn write(fd: Fd, buf: *u8, count: usize) -> i64 {
+    return _result(cast(libc.write(fd, buf, count), i64))
+}
+
+// 'open' is variadic in C, and a wasm variadic call passes a POINTER to the variadic
+// arguments rather than the arguments themselves — hence the one-element buffer.
+pub fn open(filename: *u8, flags: i32, mode: i32) -> i64 {
+    mut varargs: i32 = mode
+
+    return _result(cast(libc.open(filename, flags, &varargs), i64))
+}
+
+pub fn close(fd: Fd) -> i64 {
+    return _result(cast(libc.close(fd), i64))
+}
+
+pub fn lseek(fd: Fd, offset: i64, whence: i32) -> i64 {
+    return _result(libc.lseek(fd, offset, whence))
+}
+
+pub fn shutdown(fd: i32, how: i32) -> i64 {
+    return _result(cast(libc.shutdown(fd, how), i64))
+}
+
+pub fn socket(family: i32, sock_type: i32, protocol: i32) -> i64 {
+    return _result(cast(libc.socket(family, sock_type, protocol), i64))
+}
+
+pub fn connect(fd: i32, addr: anyptr, addrlen: i32) -> i64 {
+    return _result(cast(libc.connect(fd, addr, cast(addrlen, u32)), i64))
+}
+
+pub fn bind(fd: i32, addr: anyptr, addrlen: i32) -> i64 {
+    return _result(cast(libc.bind(fd, addr, cast(addrlen, u32)), i64))
+}
+
+pub fn listen(fd: i32, backlog: i32) -> i64 {
+    return _result(cast(libc.listen(fd, backlog), i64))
+}
+
+pub fn setsockopt(fd: i32, level: i32, optname: i32, optval: anyptr, optlen: i32) -> i64 {
+    return _result(cast(libc.setsockopt(fd, level, optname, optval, cast(optlen, u32)), i64))
+}
+
+// Same variadic-buffer treatment as 'open'. The commands core/net uses (F_GETFL,
+// F_SETFL) both take an 'int', which is what the buffer holds.
+pub fn fcntl(fd: i32, cmd: i32, arg: i64) -> i64 {
+    mut varargs: i32 = cast(arg, i32)
+
+    return _result(cast(libc.fcntl(fd, cmd, &varargs), i64))
+}
+
+// emscripten has no accept4; 'flags' is accepted for signature parity with the Linux
+// backend and ignored. core/net only ever passes 0.
+pub fn accept4(fd: i32, addr: anyptr, addrlen: anyptr, flags: i32) -> i64 {
+    return _result(cast(libc.accept(fd, addr, addrlen), i64))
+}
+
+@no_return
+pub fn exit(error_code: i32) {
+    libc.exit(error_code)
+}
+
+@no_return
+pub fn exit_group(error_code: i32) {
+    libc.exit(error_code)
+}

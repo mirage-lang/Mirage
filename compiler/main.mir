@@ -1,7 +1,6 @@
-import("runtime")
-import("core/os")
-import("core/string")
-import("core/fmt")
+#import("core/os")
+#import("core/string")
+#import("core/fmt")
 
 pub fn main() {
     const str := make_string_from_bytes("Hello World!\n")

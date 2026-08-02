@@ -1,0 +1,39 @@
+// The raw emscripten libc entry points, under their real C names. Kept in a nested
+// module of their own so 'core/sys/wasm' can expose wrappers with the SAME names as the
+// underlying C functions (read, write, close, ...) without colliding with them.
+//
+// Two of these are C variadic functions ('open', 'fcntl'), and wasm has no variadic
+// calling convention: clang lowers a variadic call to a fixed call whose last argument
+// is a POINTER to a stack buffer holding the variadic arguments. That is why they are
+// declared with a trailing 'anyptr' rather than the value the C prototype suggests —
+// see core/sys/wasm/syscalls.mir, which builds that one-element buffer.
+
+// int open(const char *path, int flags, ...) — the variadic slot holds 'mode'.
+pub ext fn open(path: *u8, flags: i32, varargs: anyptr) -> i32
+
+// int fcntl(int fd, int cmd, ...) — the variadic slot holds the command's argument.
+pub ext fn fcntl(fd: i32, cmd: i32, varargs: anyptr) -> i32
+
+// ssize_t and size_t are both one 32-bit word on wasm32.
+pub ext fn read(fd: i32, buf: anyptr, count: usize) -> i32
+pub ext fn write(fd: i32, buf: anyptr, count: usize) -> i32
+pub ext fn close(fd: i32) -> i32
+
+// off_t is 64-bit even though the address space is 32-bit.
+pub ext fn lseek(fd: i32, offset: i64, whence: i32) -> i64
+
+pub ext fn socket(domain: i32, sock_type: i32, protocol: i32) -> i32
+pub ext fn connect(fd: i32, addr: anyptr, addrlen: u32) -> i32
+pub ext fn bind(fd: i32, addr: anyptr, addrlen: u32) -> i32
+pub ext fn listen(fd: i32, backlog: i32) -> i32
+pub ext fn accept(fd: i32, addr: anyptr, addrlen: anyptr) -> i32
+pub ext fn setsockopt(fd: i32, level: i32, optname: i32, optval: anyptr, optlen: u32) -> i32
+pub ext fn getsockopt(fd: i32, level: i32, optname: i32, optval: anyptr, optlen: anyptr) -> i32
+pub ext fn shutdown(fd: i32, how: i32) -> i32
+
+// 'errno' is a macro over this in every musl-derived libc, emscripten's included.
+pub ext fn __errno_location() -> *i32
+
+// No '@no_return' here: attributes are only allowed on 'fn' declarations, so the
+// wrapper in syscalls.mir carries it instead.
+pub ext fn exit(status: i32)

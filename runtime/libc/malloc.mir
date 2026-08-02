@@ -1,8 +1,12 @@
 // Allocate n bytes of memory
 pub ext fn malloc(n: usize) -> anyptr
 
-// Allocate n bytes of memory and zeroes out the block
-pub ext fn calloc(n: usize) -> anyptr
+// Allocate count * size bytes of memory and zero out the block. Both parameters are
+// real: C's calloc takes (nmemb, size), and declaring it with one dropped the second
+// argument on the floor — invisible on x86-64, where the callee just read whatever
+// happened to be in the register, and a hard link-time signature mismatch on wasm,
+// where a call's shape has to match the definition exactly or it traps.
+pub ext fn calloc(count: usize, size: usize) -> anyptr
 
 // Re-allocate the allocated block identified by ptr and make it n bytes in size
 pub ext fn realloc(ptr: anyptr, n: usize) -> anyptr
