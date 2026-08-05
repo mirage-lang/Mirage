@@ -1,5 +1,7 @@
+#import("core/string")
+
 pub type Ascii_Test_Error = enum(i32) { Failed = 1 }
-pub type Ascii_Test_Result = error(Ascii_Test_Error)
+pub type Ascii_Test_Result = error(Ascii_Test_Error | String_Error)
 
 fn ascii_bytes_equal(a: []u8, b: []u8) -> bool {
     if len(a) != len(b) { return false }
@@ -9,16 +11,19 @@ fn ascii_bytes_equal(a: []u8, b: []u8) -> bool {
 
 @test
 fn is_space_accepts_exact_ascii_whitespace_set() -> Ascii_Test_Result {
-    if !is_space(' ') || !is_space('\t') || !is_space('\r') || !is_space('\n') ||
-       is_space(0x0b) || is_space(0x0c) || is_space('a') || is_space(0) || is_space(0x80) {
+    if !is_space(' ') || !is_space('\t') || !is_space('\r') || !is_space('\n') || is_space(0x0b) || is_space(0x0c) || is_space('a') || is_space(0) || is_space(0x80) {
         return_err .Failed
     }
+
     return_ok
 }
 
 @test
 fn trim_handles_empty_and_all_whitespace_inputs() -> Ascii_Test_Result {
-    if !ascii_bytes_equal(trim(""), "") || !ascii_bytes_equal(trim(" \t\r\n"), "") { return_err .Failed }
+    if !ascii_bytes_equal(trim(""), "") || !ascii_bytes_equal(trim(" \t\r\n"), "") { 
+        return_err .Failed 
+    }
+
     return_ok
 }
 
@@ -29,6 +34,7 @@ fn trim_removes_leading_and_trailing_whitespace() -> Ascii_Test_Result {
        !ascii_bytes_equal(trim("trailing\n"), "trailing") {
         return_err .Failed
     }
+
     return_ok
 }
 
@@ -40,15 +46,72 @@ fn trim_preserves_interior_and_non_whitespace_bytes() -> Ascii_Test_Result {
        !ascii_bytes_equal(trim("already-clean"), "already-clean") {
         return_err .Failed
     }
+
     return_ok
 }
 
 @test
 fn trim_returns_a_live_subslice() -> Ascii_Test_Result {
     mut bytes: [5]u8 = {' ', 'a', 'b', ' ', 0}
+    
     const view := trim(bytes[..4])
-    if len(view) != 2 || view[0] != 'a' || view[1] != 'b' { return_err .Failed }
+    if len(view) != 2 || view[0] != 'a' || view[1] != 'b' { 
+        return_err .Failed 
+    }
+
     view[0] = 'x'
-    if bytes[1] != 'x' { return_err .Failed }
+    if bytes[1] != 'x' { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn ascii_case_conversion_handles_letters_and_other_bytes() -> Ascii_Test_Result {
+    if to_lower('A') != 'a' || to_lower('Z') != 'z' || to_lower('a') != 'a' || to_lower('!') != '!' || to_lower(0x80) != 0x80 ||
+       to_upper('a') != 'A' || to_upper('z') != 'Z' || to_upper('A') != 'A' || to_upper('!') != '!' || to_upper(0x80) != 0x80 {
+        return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn owned_case_conversion_preserves_non_ascii_bytes() -> Ascii_Test_Result {
+    const source: [5]u8 = {'A', 'b', '!', 0x80, 'Z'}
+
+    mut lower := try to_lowercase(source)
+    defer lower.destroy()
+
+    mut upper := try to_uppercase(source)
+    defer upper.destroy()
+
+    const expected_lower: [5]u8 = {'a', 'b', '!', 0x80, 'z'}
+    const expected_upper: [5]u8 = {'A', 'B', '!', 0x80, 'Z'}
+
+    if !ascii_bytes_equal(lower.as_bytes(), expected_lower) || !ascii_bytes_equal(upper.as_bytes(), expected_upper) { 
+        return_err .Failed 
+    }
+
+    const _, lower_err := to_lowercase("x", nil_allocator())
+    const _, upper_err := to_uppercase("x", nil_allocator())
+    if !lower_err || !upper_err { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn equals_ignore_ascii_case_is_ascii_only() -> Ascii_Test_Result {
+    const high_a: [1]u8 = {0xc0}
+    const high_b: [1]u8 = {0xe0}
+    
+    if !equals_ignore_ascii_case("Mirage-303", "mIRAGE-303") || equals_ignore_ascii_case("a", "ab") ||
+       equals_ignore_ascii_case("abc", "abd") || equals_ignore_ascii_case(high_a, high_b) { 
+        return_err .Failed 
+    }
+
     return_ok
 }

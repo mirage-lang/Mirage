@@ -1,6 +1,9 @@
 #import("core/collections/list")
+#import("core/buffer")
+#import("core/string")
 
 pub type Process_Error = error(List_Error | Process_Error_Kind)
+pub type Arguments_Error = error(List_Error | String_Error | File_Error | Byte_Buffer_Error)
 pub type Process_Error_Kind = enum {
     No_Arguments
     Permission_Denied
@@ -20,4 +23,9 @@ pub type Process_Result = struct {
 
 pub fn run(arguments: [][]u8, allocator := heap_allocator()) -> (Process_Result, Process_Error) {
     return _run(arguments, allocator)
+}
+
+@no_return
+pub fn exit(error_code: i32) {
+    _exit(error_code)
 }

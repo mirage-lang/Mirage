@@ -1,0 +1,163 @@
+#compile_only_if(options.target_os == .Linux)
+
+#import("build/options") as options
+
+#import("core/io")
+#import("core/os")
+#import("core/string")
+#import("core/sys/linux") as linux
+
+const CLOCK_REALTIME: i32 = 0
+const CLOCK_MONOTONIC: i32 = 1
+
+fn time_io_error(result: i64) -> ?IO_Error {
+    if result >= 0 { return_ok }
+    if result == -linux.EINTR { 
+        return_err .Interrupted 
+    }
+    
+    return_err .Unknown
+}
+
+fn _monotonic_milliseconds() -> (u64, ?Time_Error) {
+    mut value: linux.Timespec
+    try time_io_error(linux.clock_gettime(CLOCK_MONOTONIC, &value))
+    return_ok cast(value.seconds, u64) * 1000 + cast(value.nanoseconds, u64) / 1000000
+}
+
+fn _sleep_milliseconds(milliseconds: u64) -> ?Time_Error {
+    mut requested: linux.Timespec = {
+        .seconds = cast(milliseconds / 1000, i64),
+        .nanoseconds = cast((milliseconds % 1000) * 1000000, i64),
+    }
+
+    mut remaining: linux.Timespec
+    while true {
+        const result := linux.nanosleep(&requested, &remaining)
+        if result == 0 { return_ok }
+        if result != -linux.EINTR { 
+            return_err .Unknown 
+        }
+
+        requested = remaining
+    }
+
+    return_ok
+}
+
+fn read_be_i32(bytes: []u8, offset: usize) -> i32 {
+    const value := 
+        cast(bytes[offset], u32) << 24 |
+        cast(bytes[offset + 1], u32) << 16 |
+        cast(bytes[offset + 2], u32) << 8 |
+        cast(bytes[offset + 3], u32)
+
+    return cast(value, i32)
+}
+
+fn read_be_i64(bytes: []u8, offset: usize) -> i64 {
+    mut value: u64 = 0
+    for i in ..cast(8, usize) { 
+        value = value << 8 | cast(bytes[offset + i], u64) 
+    }
+
+    return cast(value, i64)
+}
+
+fn tz_counts(bytes: []u8, header: usize, index: usize) -> usize {
+    return cast(read_be_i32(bytes, header + 20 + index * 4), usize)
+}
+
+fn timezone_offset(bytes: []u8, unix_seconds: i64) -> i32 {
+    if len(bytes) < 44 || !bytes_equal(bytes[..4], "TZif") { return 0 }
+
+    mut header: usize = 0
+    mut wide := false
+    if bytes[4] == '2' || bytes[4] == '3' || bytes[4] == '4' {
+        const ttisgmtcnt := tz_counts(bytes, 0, 0)
+        const ttisstdcnt := tz_counts(bytes, 0, 1)
+        const leapcnt := tz_counts(bytes, 0, 2)
+        const timecnt := tz_counts(bytes, 0, 3)
+        const typecnt := tz_counts(bytes, 0, 4)
+        const charcnt := tz_counts(bytes, 0, 5)
+
+        header = 44 + timecnt * 5 + typecnt * 6 + charcnt + leapcnt * 8 + ttisstdcnt + ttisgmtcnt
+        if header + 44 > len(bytes) { 
+            return 0 
+        }
+
+        wide = true
+    }
+
+    const timecnt := tz_counts(bytes, header, 3)
+    const typecnt := tz_counts(bytes, header, 4)
+    if typecnt == 0 { 
+        return 0 
+    }
+
+    const width: usize = wide ? 8 : 4
+    const transitions := header + 44
+    const indices := transitions + timecnt * width
+    const types := indices + timecnt
+    if types + typecnt * 6 > len(bytes) { 
+        return 0 
+    }
+
+    mut type_index: usize = 0
+    for i in ..timecnt {
+        const transition := wide ? read_be_i64(bytes, transitions + i * 8) : cast(read_be_i32(bytes, transitions + i * 4), i64)
+        if transition > unix_seconds { 
+            break 
+        }
+
+        type_index = cast(bytes[indices + i], usize)
+    }
+
+    if type_index >= typecnt { 
+        return 0 
+    }
+
+    return read_be_i32(bytes, types + type_index * 6)
+}
+
+fn floor_mod(value: i64, modulus: i64) -> i64 {
+    mut result := value % modulus
+    if result < 0 { 
+        result += modulus 
+    }
+
+    return result
+}
+
+fn append_two_digits(output: *String, value: i64) -> ?String_Error {
+    try output.append_byte(cast(value / 10, u8) + '0')
+    try output.append_byte(cast(value % 10, u8) + '0')
+
+    return_ok
+}
+
+fn _current_local_time(allocator: Allocator) -> (String, ?Local_Time_Error) {
+    mut now: linux.Timespec
+    try time_io_error(linux.clock_gettime(CLOCK_REALTIME, &now))
+
+    mut zone, zone_err := read_file("/etc/localtime")
+    mut offset: i32 = 0
+    if !zone_err {
+        offset = timezone_offset(zone.as_bytes(), now.seconds)
+        zone.destroy()
+    }
+
+    const seconds := floor_mod(now.seconds + cast(offset, i64), 86400)
+    mut output := try make_string_with_capacity(8, allocator)
+    const hour := seconds / 3600
+    const minute := seconds / 60 % 60
+    const second := seconds % 60
+
+    try append_two_digits(&output, hour)
+    try output.append_byte(':')
+    try append_two_digits(&output, minute)
+    try output.append_byte(':')
+    try append_two_digits(&output, second)
+
+    return_ok output
+}

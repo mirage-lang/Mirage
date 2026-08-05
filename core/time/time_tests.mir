@@ -1,0 +1,51 @@
+#compile_only_if($tests_enabled && options.target_os == .Linux)
+
+#import("build/options") as options
+#import("core/string")
+
+pub type Time_Test_Result = error(Time_Test_Error | Time_Error | Local_Time_Error)
+pub type Time_Test_Error = enum(i32) { Failed = 1 }
+
+@test
+fn monotonic_clock_and_sleep_advance() -> Time_Test_Result {
+    const before := try monotonic_milliseconds()
+    
+    try sleep_milliseconds(2)
+
+    const after := try monotonic_milliseconds()
+    if after < before + 1 { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn zero_duration_sleep_succeeds() -> Time_Test_Result {
+    try sleep_milliseconds(0)
+
+    return_ok
+}
+
+@test
+fn local_time_has_expected_format() -> Time_Test_Result {
+    mut value := try current_local_time()
+    defer value.destroy()
+
+    const bytes := value.as_bytes()
+
+    if len(bytes) != 8 || bytes[2] != ':' || bytes[5] != ':' { 
+        return_err .Failed 
+    }
+
+    if bytes[0] < '0' || bytes[0] > '2' || bytes[1] < '0' || bytes[1] > '9' { return_err .Failed }
+    if bytes[3] < '0' || bytes[3] > '5' || bytes[4] < '0' || bytes[4] > '9' { return_err .Failed }
+    if bytes[6] < '0' || bytes[6] > '5' || bytes[7] < '0' || bytes[7] > '9' { return_err .Failed }
+
+    const failed, err := current_local_time(nil_allocator())
+    if !err || failed.data != nil { 
+        return_err .Failed 
+    }
+
+    return_ok
+}

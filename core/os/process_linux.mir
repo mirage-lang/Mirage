@@ -3,6 +3,7 @@
 #import("build/options") as options
 
 #import("core/collections/list")
+#import("core/buffer")
 #import("core/string")
 #import("core/sys/linux") as linux
 
@@ -100,4 +101,9 @@ fn _run(arguments: [][]u8, allocator := heap_allocator()) -> (Process_Result, Pr
         .kind = .Signaled, 
         .code = terminating_signal(status),
     }
+}
+
+@(always_inline, no_return)
+fn _exit(error_code: i32) {
+    linux.exit_group(error_code)
 }

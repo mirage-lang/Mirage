@@ -1,0 +1,33 @@
+#compile_only_if($tests_enabled && options.target_os == .Linux)
+
+#import("build/options") as options
+#import("core/collections/list")
+#import("core/string")
+
+pub type Process_Test_Result = error(Process_Test_Error | Process_Error | Arguments_Error)
+pub type Process_Test_Error = enum(i32) { Failed = 1 }
+
+@test
+fn run_reports_exit_status_and_validates_arguments() -> Process_Test_Result {
+    const command: [3][]u8 = {"/bin/sh", "-c", "exit 7"}
+    const result := try run(command)
+    const _, empty_err := run(default)
+    const bad: [1][]u8 = {""}
+    const _, bad_err := run(bad)
+    if result.kind != .Exited || result.code != 7 || !empty_err || !bad_err { return_err .Failed }
+    return_ok
+}
+
+@test
+fn run_propagates_allocator_failure() -> Process_Test_Result {
+    const command: [1][]u8 = {"/bin/true"}
+    const _, err := run(command, nil_allocator())
+    if !err { return_err .Failed }
+    return_ok
+}
+
+@test
+fn exit_terminates_with_success() -> Process_Test_Result {
+    exit(0)
+    return_err .Failed
+}

@@ -2,6 +2,11 @@
 
 #import("build/options") as options
 
+#import("core/collections/list")
+#import("core/io")
+#import("core/string")
+#import("core/sys/linux") as linux
+
 type DIR = struct {}
 
 type Dirent = struct {
@@ -21,3 +26,209 @@ ext fn unlink(path: *u8) -> i32
 ext fn mkstemp(template: *u8) -> i32
 ext fn close(fd: i32) -> i32
 ext fn free(ptr: anyptr)
+
+macro is_dot(name: []u8) -> 
+    (len(name) == 1 && name[0] == '.') || 
+    (len(name) == 2 && name[0] == '.' && name[1] == '.')
+
+fn entry_name(entry: *Dirent) -> []u8 {
+    mut length: usize = 0
+    while length < 256 && entry.name[length] != 0 {
+        length++
+    }
+
+    return entry.name[..length]
+}
+
+fn filesystem_error(errno: i64) -> IO_Error {
+    return match errno {
+        linux.ENOENT: .Not_Exist,
+        linux.EACCES: .Permission_Denied,
+        linux.EPERM: .Permission_Denied,
+        linux.EINVAL: .Invalid_Argument,
+        _: .Unknown,
+    }
+}
+
+fn _create_directory(path: *u8) -> ?IO_Error {
+    const result := linux.mkdir(path, 0o777)
+    if result < 0 { 
+        return_err filesystem_error(-result) 
+    }
+
+    return_ok
+}
+
+fn _exists(path: *u8) -> (bool, ?IO_Error) {
+    const result := linux.access(path, 0)
+    if result == 0 { 
+        return_ok true 
+    }
+
+    if -result == linux.ENOENT || -result == linux.ENOTDIR { 
+        return_ok false 
+    }
+
+    return_err filesystem_error(-result)
+}
+
+fn _is_directory(path: *u8) -> (bool, ?IO_Error) {
+    const exists := try _exists(path)
+    if !exists { 
+        return_ok false 
+    }
+
+    const fd := linux.open(path, linux.O_RDONLY | linux.O_DIRECTORY, 0)
+    if fd >= 0 {
+        linux.close(cast(fd, linux.Fd))
+        return_ok true
+    }
+
+    if -fd == linux.ENOTDIR { 
+        return_ok false 
+    }
+
+    return_err filesystem_error(-fd)
+}
+
+fn _current_working_directory(allocator: Allocator) -> (String, ?error(IO_Error | String_Error)) {
+    mut capacity: usize = 256
+    while true {
+        mut result := try make_string_with_capacity(capacity, allocator)
+
+        const size := linux.getcwd(result.data, result.capacity + 1)
+        if size >= 0 {
+            result.length = cast(size, usize) - 1
+            return_ok result
+        }
+
+        result.destroy()
+        if -size != linux.ERANGE { 
+            return_err filesystem_error(-size) 
+        }
+
+        if capacity > (~cast(0, usize)) / 2 { 
+            return_err .Unknown 
+        }
+
+        capacity *= 2
+    }
+    
+    return_err .Unknown
+}
+
+@always_inline
+fn _write_file_atomic(path: []u8, bytes: []u8, allocator := heap_allocator()) -> ?error(IO_Error | String_Error) {
+    mut destination := try make_string_from_bytes(path, allocator)
+    defer destination.destroy()
+
+    mut temporary := try make_string_from_bytes(path, allocator)
+    defer temporary.destroy()
+
+    try temporary.append_bytes(".tmp.XXXXXX")
+
+    const fd := mkstemp(temporary.as_cstr())
+    if fd < 0 {
+        return_err .Unknown
+    }
+
+    close(fd)
+
+    const write_err := write_file(temporary.as_bytes(), bytes)
+    if write_err {
+        unlink(temporary.as_cstr())
+        return_err write_err
+    }
+
+    if rename(temporary.as_cstr(), destination.as_cstr()) != 0 {
+        unlink(temporary.as_cstr())
+        return_err .Unknown
+    }
+
+    return_ok
+}
+
+@always_inline
+fn _canonicalize(path: []u8, allocator := heap_allocator()) -> (String, ?error(IO_Error | String_Error)) {
+    mut input := try make_string_from_bytes(path, allocator)
+    defer {
+        input.destroy()
+    }
+
+    const resolved := realpath(input.as_cstr(), nil)
+    if resolved == nil {
+        return_err .Not_Exist
+    }
+
+    defer free(resolved)
+
+    return_ok try make_string_from_bytes(cast(resolved, []u8, cstr_len(resolved)), allocator)
+}
+
+@always_inline
+fn _list_directory(path: []u8, allocator := heap_allocator()) -> (List[Directory_Entry], ?error(IO_Error | List_Error | String_Error)) {
+    mut input := try make_string_from_bytes(path, allocator)
+    defer {
+        input.destroy()
+    }
+
+    const directory := opendir(input.as_cstr())
+    if directory == nil {
+        return_err .Not_Exist
+    }
+
+    defer closedir(directory)
+
+    mut entries := make_list[Directory_Entry](allocator)
+    while true {
+        const raw := readdir(directory)
+        if raw == nil {
+            break
+        }
+
+        const name := entry_name(raw)
+        if is_dot(name) {
+            continue
+        }
+
+        const owned, owned_err := make_string_from_bytes(name, allocator)
+        if owned_err {
+            destroy_directory_entries(&entries)
+            return_err owned_err
+        }
+        const err := entries.push({
+            .name = owned,
+            .is_directory = raw.entry_type == 4,
+            .is_regular = raw.entry_type == 8,
+        })
+
+        if err {
+            owned.destroy()
+            destroy_directory_entries(&entries)
+            return_err err
+        }
+    }
+
+    return_ok entries
+}
+
+@always_inline
+fn _make_temporary_file(prefix: []u8, allocator := heap_allocator()) -> (String, ?error(IO_Error | String_Error)) {
+    const path := try make_string_from_bytes(prefix, allocator)
+
+    const append_err := path.append_bytes("XXXXXX")
+    if append_err {
+        path.destroy()
+        return_err append_err
+    }
+
+    const fd := mkstemp(path.as_cstr())
+    if fd < 0 {
+        path.destroy()
+        return_err .Unknown
+    }
+
+    close(fd)
+
+    return_ok path
+}

@@ -175,3 +175,83 @@ fn impossible_reserve_reports_capacity_overflow() -> String_Test_Result {
     if !err || value.data != nil || value.length != 0 || value.capacity != 0 { return_err .Failed }
     return_ok
 }
+
+@test
+fn byte_views_search_and_equality_cover_boundaries() -> String_Test_Result {
+    if !bytes_equal("same", "same") || !bytes_equal("", "") || bytes_equal("a", "b") || bytes_equal("a", "aa") ||
+       !string_bytes_equal(substring("mirage", 1, 3), "ira") || !string_bytes_equal(substring("mirage", 4, 99), "ge") ||
+       len(substring("mirage", 99, 2)) != 0 || len(substring("mirage", 1, 0)) != 0 ||
+       !string_bytes_equal(substring_from("mirage", 3), "age") || len(substring_from("mirage", 6)) != 0 ||
+       !string_bytes_equal(take_prefix("mirage", 3), "mir") || !string_bytes_equal(take_prefix("mirage", 99), "mirage") ||
+       !string_bytes_equal(take_suffix("mirage", 3), "age") || !string_bytes_equal(take_suffix("mirage", 99), "mirage") {
+        return_err .Failed
+    }
+    const at, found := find("one two one", "two")
+    const empty_at, empty_found := find("abc", "")
+    const missing_at, missing := find("abc", "z")
+    if !found || at != 4 || !empty_found || empty_at != 0 || missing || missing_at != 0 { return_err .Failed }
+    return_ok
+}
+
+@test
+fn assign_bytes_supports_self_aliasing_and_allocator_failure() -> String_Test_Result {
+    mut value := try make_string_from_bytes("abcdef")
+    defer value.destroy()
+    const suffix := value.as_bytes()[2..]
+    try value.assign_bytes(suffix)
+    if !string_bytes_equal(value.as_bytes(), "cdef") || !is_terminated(&value) { return_err .Failed }
+
+    mut failed := try make_string_from_bytes("keep")
+    defer failed.destroy()
+    failed.allocator = nil_allocator()
+    const err := failed.assign_bytes("replacement")
+    if !err || !string_bytes_equal(failed.as_bytes(), "keep") { return_err .Failed }
+    return_ok
+}
+
+@test
+fn parse_i32_accepts_bounds_and_rejects_invalid_input() -> String_Test_Result {
+    const zero, zero_err := parse_i32("0")
+    const positive, positive_err := parse_i32(" +2147483647\n")
+    const negative, negative_err := parse_i32("-2147483648")
+    const _, empty_err := parse_i32("   ")
+    const _, junk_err := parse_i32("12x")
+    const _, high_err := parse_i32("2147483648")
+    const _, low_err := parse_i32("-2147483649")
+    if zero_err || positive_err || negative_err || zero != 0 || positive != 2147483647 || negative != -2147483647 - 1 ||
+       !empty_err || !junk_err || !high_err || !low_err { return_err .Failed }
+    return_ok
+}
+
+@test
+fn concat_and_append_values_format_supported_values() -> String_Test_Result {
+    mut tail := try make_string_from_bytes("tail")
+    defer tail.destroy()
+    mut value, err := concat("head:", cast(-12, i16), ":", cast(34, u64), ":", true, ":", tail)
+    defer value.destroy()
+    if err || !string_bytes_equal(value.as_bytes(), "head:-12:34:true:tail") { return_err .Failed }
+    const append_err := append_values(&value, ":", cast(0, usize))
+    if append_err || !string_bytes_equal(value.as_bytes(), "head:-12:34:true:tail:0") { return_err .Failed }
+
+    mut unsupported, unsupported_err := concat(cast(1.5, f32))
+    defer unsupported.destroy()
+    if !unsupported_err || !unsupported.is_empty() { return_err .Failed }
+    return_ok
+}
+
+@test
+fn split_preserves_empty_fields_and_uses_caller_allocator() -> String_Test_Result {
+    mut parts, err := split("a||b||", "||")
+    defer parts.destroy()
+    if err || parts.length != 3 || !string_bytes_equal(parts.data[0], "a") ||
+       !string_bytes_equal(parts.data[1], "b") || !string_bytes_equal(parts.data[2], "") { return_err .Failed }
+
+    mut whole, whole_err := split("abc", "")
+    defer whole.destroy()
+    mut empty, empty_err := split("", ",")
+    defer empty.destroy()
+    const failed, failed_err := split("a,b", ",", nil_allocator())
+    if whole_err || whole.length != 1 || !string_bytes_equal(whole.data[0], "abc") ||
+       empty_err || empty.length != 1 || len(empty.data[0]) != 0 || !failed_err || failed.data != nil { return_err .Failed }
+    return_ok
+}

@@ -1,4 +1,52 @@
+#import("core/string")
+
 pub macro is_space(c: u8) -> c == ' ' || c == '\t' || c == '\r' || c == '\n'
+
+pub fn to_lower(c: u8) -> u8 {
+    return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c
+}
+
+pub fn to_upper(c: u8) -> u8 {
+    return c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c
+}
+
+pub fn to_lowercase(bytes: []u8, allocator := heap_allocator()) -> (String, String_Error) {
+    mut result := try make_string_with_capacity(len(bytes), allocator)
+    for c in bytes {
+        const err := result.append_byte(to_lower(c))
+        if err {
+            result.destroy()
+            return_err err
+        }
+    }
+    
+    return_ok result
+}
+
+pub fn to_uppercase(bytes: []u8, allocator := heap_allocator()) -> (String, String_Error) {
+    mut result := try make_string_with_capacity(len(bytes), allocator)
+    for c in bytes {
+        const err := result.append_byte(to_upper(c))
+        if err {
+            result.destroy()
+            return_err err
+        }
+    }
+
+    return_ok result
+}
+
+pub fn equals_ignore_ascii_case(a: []u8, b: []u8) -> bool {
+    if len(a) != len(b) { 
+        return false 
+    }
+
+    for i in ..len(a) {
+        if to_lower(a[i]) != to_lower(b[i]) { return false }
+    }
+
+    return true
+}
 
 pub fn trim(bytes: []u8) -> []u8 {
     mut start: usize = 0

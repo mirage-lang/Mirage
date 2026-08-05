@@ -1,0 +1,19 @@
+#import("core/buffer")
+#import("core/io")
+#import("core/os")
+#import("core/string")
+
+pub type Time_Error = error(IO_Error)
+pub type Local_Time_Error = error(Time_Error | File_Error | Byte_Buffer_Error | String_Error)
+
+pub fn monotonic_milliseconds() -> (u64, ?Time_Error) {
+    return _monotonic_milliseconds()
+}
+
+pub fn sleep_milliseconds(milliseconds: u64) -> ?Time_Error {
+    return _sleep_milliseconds(milliseconds)
+}
+
+pub fn current_local_time(allocator := heap_allocator()) -> (String, ?Local_Time_Error) {
+    return _current_local_time(allocator)
+}

@@ -1,0 +1,17 @@
+#compile_only_if(options.target_os == .Wasm32)
+
+#import("build/options") as options
+
+#import("core/string")
+
+fn _monotonic_milliseconds() -> (u64, ?Time_Error) {
+    return_err .Unsupported
+}
+
+fn _sleep_milliseconds(milliseconds: u64) -> ?Time_Error {
+    return_err .Unsupported
+}
+
+fn _current_local_time(allocator: Allocator) -> (String, ?Local_Time_Error) {
+    return_err .Unsupported
+}

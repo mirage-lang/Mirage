@@ -6,6 +6,9 @@
 #import("core/collections/list")
 #import("core/io")
 #import("core/string")
+#import("core/sys/linux") as linux
+
+ext fn unlink(path: *u8) -> i32
 
 pub type Filesystem_Test_Result = error(Filesystem_Test_Error | File_Error | Byte_Buffer_Error | IO_Error | String_Error | List_Error)
 pub type Filesystem_Test_Error = enum {
@@ -160,10 +163,12 @@ fn list_directory_reports_created_regular_file_and_omits_dot_entries() -> Filesy
            filesystem_bytes_equal(entry.name.as_bytes(), "..") {
             return_err .Failed
         }
+
         if filesystem_bytes_equal(entry.name.as_bytes(), expected_name) {
             if entry.is_directory || !entry.is_regular {
                 return_err .Failed
             }
+            
             found = true
         }
     }
@@ -178,6 +183,7 @@ fn list_directory_reports_created_regular_file_and_omits_dot_entries() -> Filesy
 @test
 fn missing_paths_return_errors() -> Filesystem_Test_Result {
     const missing := "/tmp/mirage-filesystem-path-that-must-not-exist-7f19b33c"
+
     const _, read_err := read_file(missing)
     const _, canonical_err := canonicalize(missing)
     const _, list_err := list_directory(missing)
@@ -197,6 +203,110 @@ fn allocation_failures_are_reported_without_partial_results() -> Filesystem_Test
 
     if !temporary_err || !temporary.is_empty() || !canonical_err || !list_err || entries.data != nil || entries.length != 0 || entries.capacity != 0 {
         return_err .Failed
+    }
+
+    return_ok
+}
+
+@test
+fn current_directory_is_absolute_existing_and_a_directory() -> Filesystem_Test_Result {
+    mut cwd := try current_working_directory()
+    defer cwd.destroy()
+
+    const present := try exists(cwd.as_bytes())
+    const directory := try is_directory(cwd.as_bytes())
+    const regular := try is_file(cwd.as_bytes())
+
+    if cwd.is_empty() || cwd.data[0] != '/' || !present || !directory || regular { 
+        return_err .Failed 
+    }
+
+    const _, alloc_err := current_working_directory(nil_allocator())
+    if !alloc_err { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn path_predicates_distinguish_files_directories_and_missing_paths() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer { 
+        unlink(path.as_cstr()); 
+        path.destroy() 
+    }
+
+    if !(try exists(path.as_bytes())) || !(try is_file(path.as_bytes())) || try is_directory(path.as_bytes()) ||
+       !(try exists("/tmp")) || !(try is_directory("/tmp")) || try is_file("/tmp") ||
+       try exists("/tmp/mirage-filesystem-definitely-missing-19a4") ||
+       try is_file("/tmp/mirage-filesystem-definitely-missing-19a4") ||
+       try is_directory("/tmp/mirage-filesystem-definitely-missing-19a4") {
+        return_err .Failed
+    }
+
+    const _, exists_err := exists("/tmp", nil_allocator())
+    const _, file_err := is_file("/tmp", nil_allocator())
+    const _, directory_err := is_directory("/tmp", nil_allocator())
+    if !exists_err || !file_err || !directory_err { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn create_directory_creates_a_real_directory() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-dir-")
+    if unlink(path.as_cstr()) != 0 { 
+        path.destroy(); 
+        return_err .Failed 
+    }
+
+    defer { linux.rmdir(path.as_cstr()); path.destroy() }
+
+    try create_directory(path.as_bytes())
+    if !(try exists(path.as_bytes())) || !(try is_directory(path.as_bytes())) || try is_file(path.as_bytes()) { 
+        return_err .Failed 
+    }
+
+    const duplicate_err := create_directory(path.as_bytes())
+    const empty_err := create_directory("")
+    const alloc_err := create_directory("/tmp/no-allocation", nil_allocator())
+    if !duplicate_err || !empty_err || !alloc_err { 
+        return_err .Failed 
+    }
+
+    return_ok
+}
+
+@test
+fn empty_file_and_append_line_have_exact_contents() -> Filesystem_Test_Result {
+    mut path := try make_temporary_file("/tmp/mirage-filesystem-test-")
+    defer { 
+        unlink(path.as_cstr());
+        path.destroy() 
+    }
+
+    try write_file(path.as_bytes(), "discard")
+    try create_empty_file(path.as_bytes())
+
+    mut empty := try read_file(path.as_bytes())
+    if empty.length != 0 { 
+        empty.destroy(); 
+        return_err .Failed 
+    }
+
+    empty.destroy()
+
+    try append_line(path.as_bytes(), "one")
+    try append_line(path.as_bytes(), "two")
+
+    mut contents := try read_file(path.as_bytes())
+    defer contents.destroy()
+
+    if !filesystem_bytes_equal(contents.as_bytes(), "one\ntwo\n") { 
+        return_err .Failed 
     }
 
     return_ok

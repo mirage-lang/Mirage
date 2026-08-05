@@ -1,3 +1,4 @@
+#import("core/collections/list")
 #import("core/hash")
 #import("core/mem") as mem
 
@@ -8,6 +9,18 @@ pub type String_Error = error(Allocator_Error | String_Error_Kind)
 pub type String_Error_Kind = enum {
     Capacity_Overflow
 }
+
+pub type Parse_Int_Error = enum(i32) {
+    Invalid = 1
+    Overflow
+}
+
+pub type Concat_Error = error(String_Error | Concat_Error_Kind)
+pub type Concat_Error_Kind = enum(i32) {
+    Unsupported_Type = 1
+}
+
+pub type Split_Error = error(List_Error)
 
 pub type String = struct {
     allocator: Allocator
@@ -103,6 +116,15 @@ impl String {
         return make_string_from_bytes(self.as_bytes(), self.allocator)
     }
 
+    // Builds the replacement before releasing the old allocation, so `bytes` may safely be
+    // a view into this String's own storage.
+    pub fn assign_bytes(self, bytes: []u8) -> ?String_Error {
+        const replacement := try make_string_from_bytes(bytes, self.allocator)
+        self.destroy()
+        self.* = replacement
+        return_ok
+    }
+
     @always_inline
     pub fn as_bytes(self) -> []u8 {
         return cast(self.data, []u8, self.length)
@@ -194,6 +216,194 @@ pub fn ends_with(bytes: []u8, suffix: []u8) -> bool {
     }
     
     return mem.compare(&bytes[end - n], suffix, n) == 0
+}
+
+pub fn bytes_equal(a: []u8, b: []u8) -> bool {
+    if len(a) != len(b) {
+        return false
+    }
+
+    return len(a) == 0 || mem.compare(a, b, len(a)) == 0
+}
+
+pub fn substring(bytes: []u8, start: usize, count: usize) -> []u8 {
+    if start >= len(bytes) || count == 0 {
+        return bytes[..0]
+    }
+
+    const available := len(bytes) - start
+    const length := count < available ? count : available
+
+    return bytes[start..start + length]
+}
+
+pub fn substring_from(bytes: []u8, start: usize) -> []u8 {
+    return start < len(bytes) ? bytes[start..] : bytes[..0]
+}
+
+pub fn take_prefix(bytes: []u8, count: usize) -> []u8 {
+    return bytes[..(count < len(bytes) ? count : len(bytes))]
+}
+
+pub fn take_suffix(bytes: []u8, count: usize) -> []u8 {
+    const length := count < len(bytes) ? count : len(bytes)
+
+    return bytes[len(bytes) - length..]
+}
+
+pub fn find(bytes: []u8, needle: []u8) -> (usize, bool) {
+    if len(needle) == 0 {
+        return 0, true
+    }
+
+    if len(needle) > len(bytes) {
+        return 0, false
+    }
+
+    for i in ..len(bytes) - len(needle) + 1 {
+        if bytes_equal(bytes[i..i + len(needle)], needle) {
+            return i, true
+        }
+    }
+
+    return 0, false
+}
+
+pub fn parse_i32(bytes: []u8) -> (i32, ?Parse_Int_Error) {
+    mut start: usize = 0
+    mut end := len(bytes)
+
+    while start < end && (bytes[start] == ' ' || bytes[start] == '\t' || bytes[start] == '\r' || bytes[start] == '\n') { start++ }
+    while end > start && (bytes[end - 1] == ' ' || bytes[end - 1] == '\t' || bytes[end - 1] == '\r' || bytes[end - 1] == '\n') { end-- }
+    if start == end { 
+        return_err .Invalid 
+    }
+
+    mut negative := false
+    if bytes[start] == '-' || bytes[start] == '+' {
+        negative = bytes[start] == '-'
+        start++
+    }
+
+    if start == end { 
+        return_err .Invalid 
+    }
+
+    const limit: u64 = negative ? 2147483648 : 2147483647
+    mut value: u64 = 0
+    for i in start..end {
+        const c := bytes[i]
+        if c < '0' || c > '9' { 
+            return_err .Invalid 
+        }
+
+        const digit := cast(c - '0', u64)
+        if value > (limit - digit) / 10 { 
+            return_err .Overflow 
+        }
+
+        value = value * 10 + digit
+    }
+
+    if negative {
+        if value == 2147483648 { return_ok -2147483647 - 1 }
+        return_ok -cast(value, i32)
+    }
+
+    return_ok cast(value, i32)
+}
+
+fn append_u64_decimal(out: *String, value: u64) -> String_Error {
+    mut digits: [20]u8 = undefined
+    mut count: usize = 0
+
+    mut remaining := value
+    if remaining == 0 {
+        return out.append_byte('0')
+    }
+
+    while remaining > 0 {
+        digits[count++] = cast(remaining % 10, u8) + '0'
+        remaining /= 10
+    }
+
+    while count > 0 {
+        try out.append_byte(digits[--count])
+    }
+
+    return_ok
+}
+
+fn append_i64_decimal(out: *String, value: i64) -> String_Error {
+    if value < 0 {
+        try out.append_byte('-')
+        return append_u64_decimal(out, cast(-(value + 1), u64) + 1)
+    }
+
+    return append_u64_decimal(out, cast(value, u64))
+}
+
+fn append_value(out: *String, value: any) -> Concat_Error {
+    const id := type_of(value)
+
+    if id == type_of(String)      { try out.append(cast(value, *String).*); return_ok }
+    if id == type_of(String_View) { try out.append_bytes(cast(value, *String_View).*); return_ok }
+    if id == type_of(*u8)         { try out.append_cstr(cast(value, **u8).*); return_ok }
+    if id == type_of(bool)        { try out.append_bytes(cast(value, *bool).* ? "true" : "false"); return_ok }
+    if id == type_of(i8)          { try append_i64_decimal(out, cast(cast(value, *i8).*, i64)); return_ok }
+    if id == type_of(u8)          { try append_u64_decimal(out, cast(cast(value, *u8).*, u64)); return_ok }
+    if id == type_of(i16)         { try append_i64_decimal(out, cast(cast(value, *i16).*, i64)); return_ok }
+    if id == type_of(u16)         { try append_u64_decimal(out, cast(cast(value, *u16).*, u64)); return_ok }
+    if id == type_of(i32)         { try append_i64_decimal(out, cast(cast(value, *i32).*, i64)); return_ok }
+    if id == type_of(u32)         { try append_u64_decimal(out, cast(cast(value, *u32).*, u64)); return_ok }
+    if id == type_of(i64)         { try append_i64_decimal(out, cast(value, *i64).*); return_ok }
+    if id == type_of(u64)         { try append_u64_decimal(out, cast(value, *u64).*); return_ok }
+    if id == type_of(usize)       { try append_u64_decimal(out, cast(cast(value, *usize).*, u64)); return_ok }
+
+    return_err .Unsupported_Type
+}
+
+pub fn append_values(out: *String, values: ...any) -> Concat_Error {
+    for value in values {
+        try append_value(out, value) 
+    }
+
+    return_ok
+}
+
+pub fn concat(values: ...any) -> (String, Concat_Error) {
+    mut out := make_string()
+
+    const err := append_values(&out, values...)
+    if err {
+        out.destroy()
+        return_err err
+    }
+
+    return_ok out
+}
+
+pub fn split(bytes: []u8, delimiter: []u8, allocator := heap_allocator()) -> (List[String_View], Split_Error) {
+    mut parts := make_list[String_View](allocator)
+    if len(delimiter) == 0 {
+        try parts.push(bytes)
+        return_ok parts
+    }
+
+    mut start: usize = 0
+    while start <= len(bytes) {
+        const relative, found := find(bytes[start..], delimiter)
+        if !found {
+            try parts.push(bytes[start..])
+            break
+        }
+
+        const at := start + relative
+        try parts.push(bytes[start..at])
+        start = at + len(delimiter)
+    }
+    
+    return_ok parts
 }
 
 pub fn string_hash(str: String) -> u64 {

@@ -1,0 +1,39 @@
+#compile_only_if(options.target_os == .Wasm32)
+
+#import("build/options") as options
+
+#import("core/collections/list")
+#import("core/io")
+#import("core/string")
+
+fn _create_directory(path: *u8) -> ?IO_Error {
+    return_err .Unsupported
+}
+
+fn _exists(path: *u8) -> (bool, ?IO_Error) {
+    return_err .Unsupported
+}
+
+fn _is_directory(path: *u8) -> (bool, ?IO_Error) {
+    return_err .Unsupported
+}
+
+fn _current_working_directory(allocator: Allocator) -> (String, ?error(IO_Error | String_Error)) {
+    return_err .Unsupported
+}
+
+fn _write_file_atomic(path: []u8, bytes: []u8, allocator := heap_allocator()) -> ?error(IO_Error | String_Error) {
+    return_err .Unsupported
+}
+
+fn _canonicalize(path: []u8, allocator := heap_allocator()) -> (String, ?error(IO_Error | String_Error)) {
+    return_err .Unsupported
+}
+
+fn _list_directory(path: []u8, allocator := heap_allocator()) -> (List[Directory_Entry], ?error(IO_Error | List_Error | String_Error)) {
+    return_err .Unsupported
+}
+
+fn _make_temporary_file(prefix: []u8, allocator := heap_allocator()) -> (String, ?error(IO_Error | String_Error)) {
+    return_err .Unsupported
+}

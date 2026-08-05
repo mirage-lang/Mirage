@@ -1,5 +1,10 @@
 // Represents a file descriptor
 pub type Fd = i32
 
+pub type Timespec = struct {
+    seconds: i64
+    nanoseconds: i64
+}
+
 // Represents a process ID
 pub type Pid = i32

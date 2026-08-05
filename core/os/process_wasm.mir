@@ -1,0 +1,10 @@
+#compile_only_if(options.target_os == .Wasm32)
+
+#import("build/options") as options
+
+fn _run(arguments: [][]u8, allocator := heap_allocator()) -> (Process_Result, Process_Error)  {
+    return_err .Unknown
+}
+
+fn _exit(error_code: i32) {
+}
