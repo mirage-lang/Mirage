@@ -2,7 +2,7 @@
     <img src=".github/mirage_logo.svg" alt="Mirage Logo" style="width:65%"/>
 </p>
 
-# Mirage
+---
 
 Mirage is a systems programming language that aims to provide the freedom and
 flexibility of C, with the conveniences and ergonomics of modern languages.
